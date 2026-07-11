@@ -1,0 +1,312 @@
+# wincrab — debloated Windows 11 ISO configuration
+#
+# Usage:
+#   wincrab build --iso Win11_24H2.iso --output Win11_debloated.iso --config config.toml
+#
+# All sections are optional. Omitted values use the defaults shown below.
+# Profiles can be used as a base: wincrab build --profile gaming --config config.toml
+
+# WIM image index to modify. Common indices:
+#   1 = Home       2 = Home N
+#   3 = Education  4 = Education N
+#   5 = Pro N      6 = Pro
+wim_index = 6
+
+[apps]
+# Remove known third-party and Microsoft bloatware (TikTok, Candy Crush,
+# Clipchamp, Solitaire, Weather, Maps, Feedback Hub, etc.)
+remove_bloatware = true
+# Remove Xbox apps and Game Bar
+remove_xbox = true
+# Remove Microsoft Teams consumer chat
+remove_teams = true
+# Remove OneDrive pre-install
+remove_onedrive = true
+# Remove Cortana
+remove_cortana = true
+# Remove the Microsoft Store (WARNING: no Store = no easy way to install UWP apps)
+remove_store = false
+# Remove new Outlook for Windows
+remove_outlook = true
+# Remove Mail & Calendar
+remove_mail = true
+# Remove Dev Home
+remove_dev_home = true
+# Remove Phone Link / Cross Device backend
+remove_phone_link = true
+# Additional package name substrings to match and remove.
+# Example: extra_patterns = ["SomePublisher.UnwantedApp"]
+extra_patterns = []
+
+[telemetry]
+# Set AllowTelemetry = 0 and MaxTelemetryAllowed = 0
+disable = true
+# Disable Customer Experience Improvement Program
+disable_ceip = true
+# Disable application compatibility telemetry (AITEnable)
+disable_app_telemetry = true
+# Block known Microsoft telemetry domains via the hosts file
+block_telemetry_hosts = true
+# Additional domains to block in the hosts file
+extra_blocked_hosts = []
+# Disable clipboard cloud sync
+disable_clipboard_sync = true
+# Disable Find My Device
+disable_find_my_device = true
+# Disable input personalization / inking telemetry
+disable_input_personalization = true
+# Disable Wi-Fi Sense / hotspot sharing
+disable_wifi_sense = true
+# Set feedback frequency to "Never"
+set_feedback_never = true
+
+[privacy]
+# Disable the advertising ID for app tracking
+disable_advertising_id = true
+# Disable web/Bing search results in Start menu
+disable_web_search = true
+# Disable activity history and timeline
+disable_activity_history = true
+# Disable tailored experiences based on diagnostic data
+disable_tailored_experiences = true
+# Disable Windows Error Reporting
+disable_error_reporting = true
+# Restrict default app permissions (camera, mic, location, etc.)
+restrict_app_permissions = true
+# Disable suggested actions on copy
+disable_suggested_actions = true
+# Disable Windows Spotlight ads and cloud-delivered content
+disable_spotlight_ads = true
+
+[copilot]
+# Disable Windows Copilot (machine policy + default user profile)
+disable = true
+
+[edge]
+# Disable Edge first-run experience / welcome page
+disable_first_run = true
+# Disable "Make Edge your default browser" nagging
+disable_default_browser_nag = true
+# Disable Edge sidebar (Copilot, Discover, etc.)
+disable_sidebar = true
+# Disable Edge desktop search bar widget
+disable_search_bar = true
+
+[visuals]
+# Set VisualFXSetting to "Adjust for best performance", disable taskbar
+# animations, Aero Peek, transparency, etc.
+optimize_for_performance = true
+# Disable rotating lock screen spotlight images and tips
+disable_lock_screen_tips = true
+# Disable "Get tips and suggestions" notifications
+disable_suggestions = true
+# Enable system-wide dark mode
+dark_mode = true
+
+[taskbar]
+# Hide the Widgets button on the taskbar
+hide_widgets_button = true
+# Hide the Chat (Teams) button on the taskbar
+hide_chat_button = true
+# Use search icon instead of full search bar
+search_icon_only = true
+# Disable Start menu recommendations section
+disable_start_recommendations = true
+# Left-align the taskbar (instead of center)
+left_align = true
+# Disable the notification center / action center
+disable_notification_center = false
+
+[services]
+# Disable Connected User Experiences and Telemetry (DiagTrack)
+disable_diagtrack = true
+# Disable WAP Push Message Routing (dmwappushservice)
+disable_dmwappush = true
+# Disable Windows Error Reporting service (WerSvc)
+disable_wer = true
+# Disable Xbox network services (XblAuthManager, XblGameSave, etc.)
+disable_xbox = true
+# Disable Downloaded Maps Manager (MapsBroker)
+disable_maps_broker = true
+# Disable Retail Demo service
+disable_retail_demo = true
+# Disable Remote Registry
+disable_remote_registry = true
+# Disable Geolocation service (lfsvc)
+disable_geolocation = true
+# Disable Windows Search indexer (WSearch)
+disable_search = false
+# Disable SysMain / Superfetch (recommended for SSD-only systems)
+disable_sysmain = false
+# Disable SSDP Discovery (UPnP)
+disable_ssdp = true
+# Disable UPnP Device Host
+disable_upnp = true
+# Disable Fax service
+disable_fax = true
+# Disable Print Spooler
+disable_print_spooler = false
+# Disable Windows Media Player network sharing
+disable_wmp_sharing = true
+# Disable Widgets service entirely (not just hide the button)
+disable_widgets_service = true
+# Disable Telephony API (TapiSrv)
+disable_telephony = true
+
+[scheduled_tasks]
+# Remove telemetry scheduled tasks (Compatibility Appraiser, etc.)
+remove_telemetry_tasks = true
+# Remove CEIP scheduled tasks
+remove_ceip_tasks = true
+# Remove disk diagnostic scheduled tasks
+remove_disk_diagnostic_tasks = true
+# Remove maps update scheduled task
+remove_maps_task = true
+# Remove feedback (SIUF) scheduled tasks
+remove_feedback_tasks = true
+
+[defender]
+# Disable Windows Defender real-time protection via policy
+disable_realtime = true
+# Disable SmartScreen reputation checking
+disable_smartscreen = true
+# Disable cloud-delivered protection
+disable_cloud_protection = true
+# Disable automatic sample submission
+disable_sample_submission = true
+# Disable Windows Defender services (WinDefend, WdNisSvc)
+disable_services = true
+
+[windows_update]
+# Disable automatic Windows updates
+disable_auto_updates = false
+# Disable Delivery Optimization (P2P update sharing)
+disable_delivery_optimization = true
+# Disable update-related scheduled tasks
+disable_update_tasks = false
+# Exclude driver updates from Windows Update
+exclude_driver_updates = false
+# Disable automatic restart for updates when users are logged in
+no_auto_reboot = true
+
+[explorer]
+# Restore classic right-click context menu (disable Windows 11 truncated menu)
+classic_context_menu = true
+# Show file extensions in Explorer
+show_file_extensions = true
+# Show hidden files and folders
+show_hidden_files = false
+# Launch Explorer to "This PC" instead of Quick Access/Home
+launch_to_this_pc = true
+# Disable recent files in Quick Access
+disable_recent_files = true
+# Disable snap layouts popup on maximize hover
+disable_snap_layouts = false
+
+[performance]
+# Inject a high-performance power plan on first boot
+high_perf_power_plan = true
+# Lower shutdown timeouts for faster shutdown
+faster_shutdown = true
+# Disable Game DVR / Game Bar recording
+disable_game_dvr = true
+# Globally disable background app execution
+disable_background_apps = true
+# Disable NTFS last access timestamps (NtfsDisableLastAccessUpdate)
+ntfs_disable_last_access = true
+# Disable NTFS 8.3 short filename creation
+ntfs_disable_8dot3 = true
+# Apply network tuning (disable Nagle, NetworkThrottlingIndex)
+network_tuning = false
+
+[security]
+# Enable Attack Surface Reduction (ASR) rules via Exploit Guard policy
+asr_rules = false
+# Disable Remote Desktop
+disable_remote_desktop = true
+# Disable SMBv1 (legacy file sharing protocol)
+disable_smb1 = true
+
+[recall]
+# Disable Windows Recall / AI data analysis (24H2+)
+disable = true
+
+[oobe]
+# Inject autounattend.xml to automate Out-of-Box Experience setup
+inject_autounattend = true
+# Skip Microsoft account requirement (allow local account creation)
+skip_microsoft_account = true
+# Skip privacy consent screens during OOBE
+skip_privacy_screens = true
+# Skip "Let's finish setting up your device" nag after first login
+skip_finish_setup_nag = true
+# Bypass TPM 2.0 requirement check
+bypass_tpm = true
+# Bypass Secure Boot requirement check
+bypass_secureboot = true
+# Bypass RAM requirement check
+bypass_ram = true
+# Set timezone (e.g. "Pacific Standard Time", "UTC")
+# timezone = "UTC"
+# Set input locale (e.g. "en-US", "de-DE")
+# locale = "en-US"
+# Create a local account with this username
+# local_account_name = "User"
+# Password for the local account (empty = no password)
+# local_account_password = ""
+# Auto-logon on first boot
+auto_logon = false
+# Disable BitLocker device encryption during OOBE
+disable_bitlocker = true
+# Set computer name ("*" = random)
+# computer_name = "WINCRAB-PC"
+# Embed a product key for edition auto-selection
+# product_key = "VK7JG-NPHTM-C97JM-9MPGT-3V66T"
+# Additional PowerShell commands to run on first logon
+first_logon_commands = []
+# Convert Windows edition (e.g. "Professional", "Enterprise", "Education", "Core")
+# convert_edition = "Professional"
+# Skip automatic Windows activation
+skip_auto_activation = true
+# Automatically partition disk 0 (EFI + MSR + Windows)
+auto_partition = false
+
+[drivers]
+# Install WinBtrfs — open-source btrfs driver (read/write btrfs partitions)
+btrfs = false
+# Install Ext2Fsd — ext2/ext3/ext4 driver (read/write ext4 partitions)
+ext4 = false
+# Install WinFsp — Windows FUSE layer (required for mergerfs)
+winfsp = false
+# Install mergerfs-windows — union/pool filesystem (requires winfsp)
+mergerfs = false
+# Install VirtIO drivers for QEMU/KVM virtual machines
+virtio = false
+
+[seelen]
+# Download and embed Seelen-UI desktop environment into the ISO.
+# Seelen-UI provides a custom taskbar, tiling WM, app launcher, and widgets.
+# Requires internet during ISO build to download from GitHub.
+# NOTE: Seelen-UI requires Edge/WebView2 -- do not remove Edge when this is enabled.
+bundle = true
+# Set Seelen-UI as the Windows shell (replaces explorer.exe taskbar/start).
+# If false, Seelen-UI runs alongside the native shell.
+replace_shell = true
+# Remove Windows Search UI packages (Seelen has its own app launcher)
+remove_windows_search_ui = true
+# Remove Start menu experience packages (Seelen replaces Start)
+remove_start_experience = true
+
+[inject]
+# Files or directories to inject into the WIM image.
+# Example:
+# [[inject.files]]
+# src = "/path/to/file.exe"
+# dest = "Users/Public/Desktop/file.exe"
+
+[hooks]
+# External scripts to run at pipeline stages.
+# pre_extract = "/path/to/script.sh"
+# post_debloat = "/path/to/script.sh"
+# pre_repack = "/path/to/script.sh"
+# post_build = "/path/to/script.sh"

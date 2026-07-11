@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    wincrab headless test autounattend.xml
+
+    Fully automates Windows 11 installation for CI/headless testing:
+      - Accepts EULA, skips product key UI
+      - Partitions disk 0 (EFI + MSR + Windows)
+      - Bypasses Microsoft account requirement
+      - Creates local admin "Test" with no password
+      - Auto-logon, then runs wincrab-verify.ps1 from the install media
+      - Shuts down after verification
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend"
+          xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+    <!-- ================================================================== -->
+    <!-- windowsPE: disk layout, EULA, BypassNRO                            -->
+    <!-- ================================================================== -->
+    <settings pass="windowsPE">
+        <component name="Microsoft-Windows-International-Core-WinPE"
+                   processorArchitecture="amd64"
+                   publicKeyToken="31bf3856ad364e35"
+                   language="neutral" versionScope="nonSxS">
+            <SetupUILanguage>
+                <UILanguage>en-US</UILanguage>
+            </SetupUILanguage>
+            <InputLocale>0809:00000809</InputLocale>
+            <SystemLocale>en-GB</SystemLocale>
+            <UILanguage>en-GB</UILanguage>
+            <UserLocale>en-GB</UserLocale>
+        </component>
+
+        <component name="Microsoft-Windows-Setup"
+                   processorArchitecture="amd64"
+                   publicKeyToken="31bf3856ad364e35"
+                   language="neutral" versionScope="nonSxS">
+
+            <!-- Bypass Microsoft account -->
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+            </RunSynchronous>
+
+            <!-- Auto-partition disk 0: EFI (100MB) + MSR (16MB) + Windows -->
+            <DiskConfiguration>
+                <Disk wcm:action="add">
+                    <DiskID>0</DiskID>
+                    <WillWipeDisk>true</WillWipeDisk>
+                    <CreatePartitions>
+                        <CreatePartition wcm:action="add">
+                            <Order>1</Order>
+                            <Size>100</Size>
+                            <Type>EFI</Type>
+                        </CreatePartition>
+                        <CreatePartition wcm:action="add">
+                            <Order>2</Order>
+                            <Size>16</Size>
+                            <Type>MSR</Type>
+                        </CreatePartition>
+                        <CreatePartition wcm:action="add">
+                            <Order>3</Order>
+                            <Extend>true</Extend>
+                            <Type>Primary</Type>
+                        </CreatePartition>
+                    </CreatePartitions>
+                    <ModifyPartitions>
+                        <ModifyPartition wcm:action="add">
+                            <Order>1</Order>
+                            <PartitionID>1</PartitionID>
+                            <Format>FAT32</Format>
+                            <Label>System</Label>
+                        </ModifyPartition>
+                        <ModifyPartition wcm:action="add">
+                            <Order>2</Order>
+                            <PartitionID>2</PartitionID>
+                        </ModifyPartition>
+                        <ModifyPartition wcm:action="add">
+                            <Order>3</Order>
+                            <PartitionID>3</PartitionID>
+                            <Format>NTFS</Format>
+                            <Label>Windows</Label>
+                            <Letter>C</Letter>
+                        </ModifyPartition>
+                    </ModifyPartitions>
+                </Disk>
+            </DiskConfiguration>
+
+            <!-- Install to partition 3 of disk 0 -->
+            <ImageInstall>
+                <OSImage>
+                    <InstallFrom>
+                        <MetaData wcm:action="add">
+                            <Key>/IMAGE/INDEX</Key>
+                            <Value>6</Value>
+                        </MetaData>
+                    </InstallFrom>
+                    <InstallTo>
+                        <DiskID>0</DiskID>
+                        <PartitionID>3</PartitionID>
+                    </InstallTo>
+                </OSImage>
+            </ImageInstall>
+
+            <UserData>
+                <AcceptEula>true</AcceptEula>
+                <ProductKey>
+                    <!-- Generic Windows 11 Pro KMS key (selects edition, no activation) -->
+                    <Key>VK7JG-NPHTM-C97JM-9MPGT-3V66T</Key>
+                    <WillShowUI>Never</WillShowUI>
+                </ProductKey>
+            </UserData>
+        </component>
+    </settings>
+
+    <!-- ================================================================== -->
+    <!-- oobeSystem: skip OOBE, create user, auto-logon, run verification   -->
+    <!-- ================================================================== -->
+    <settings pass="oobeSystem">
+        <!-- Pre-set locale so OOBE skips the region/keyboard screens -->
+        <component name="Microsoft-Windows-International-Core"
+                   processorArchitecture="amd64"
+                   publicKeyToken="31bf3856ad364e35"
+                   language="neutral" versionScope="nonSxS">
+            <InputLocale>0809:00000809</InputLocale>
+            <SystemLocale>en-GB</SystemLocale>
+            <UILanguage>en-GB</UILanguage>
+            <UserLocale>en-GB</UserLocale>
+        </component>
+
+        <component name="Microsoft-Windows-Shell-Setup"
+                   processorArchitecture="amd64"
+                   publicKeyToken="31bf3856ad364e35"
+                   language="neutral" versionScope="nonSxS">
+
+            <OOBE>
+                <ProtectYourPC>3</ProtectYourPC>
+                <HideEULAPage>true</HideEULAPage>
+                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+            </OOBE>
+
+            <UserAccounts>
+                <LocalAccounts>
+                    <LocalAccount wcm:action="add">
+                        <Password>
+                            <Value></Value>
+                            <PlainText>true</PlainText>
+                        </Password>
+                        <Group>administrators</Group>
+                        <DisplayName>Test</DisplayName>
+                        <Name>Test</Name>
+                    </LocalAccount>
+                </LocalAccounts>
+            </UserAccounts>
+
+            <AutoLogon>
+                <Password>
+                    <Value></Value>
+                    <PlainText>true</PlainText>
+                </Password>
+                <Enabled>true</Enabled>
+                <Username>Test</Username>
+            </AutoLogon>
+
+            <!--
+                FirstLogonCommands: copy verify.ps1 from installation media
+                (CD-ROM) to C:\ and execute it. The script writes results to
+                COM1 (serial) and shuts down the VM.
+            -->
+            <FirstLogonCommands>
+                <SynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Description>Find and copy verification script from install media</Description>
+                    <CommandLine>powershell.exe -NoProfile -Command "foreach($d in 'D','E','F','G','H'){if(Test-Path \"${d}:\wincrab-verify.ps1\"){Copy-Item \"${d}:\wincrab-verify.ps1\" C:\wincrab-verify.ps1;break}}"</CommandLine>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Description>Run wincrab verification</Description>
+                    <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\wincrab-verify.ps1</CommandLine>
+                </SynchronousCommand>
+            </FirstLogonCommands>
+        </component>
+    </settings>
+</unattend>

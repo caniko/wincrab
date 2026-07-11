@@ -1,0 +1,9 @@
+/target
+result*
+wincrab-work/
+wincrab-vm/
+/wincrab-work
+/wincrab-vm
+/Win11_25H2_EnglishInternational_x64.iso
+/Win11_25H2_EnglishInternational_x64_debloated.iso
+/Win11_debloated.iso
