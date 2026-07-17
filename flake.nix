@@ -2,9 +2,9 @@
   description = "wincrab — debloated Windows 11 ISO builder for Linux";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
-    crane.url = "github:ipetkov/crane";
+    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=9bfa8bdb0ecb22d7bc11448665f7fbaebae7a759";
+    nixpkgs.follows = "rs-harbor/nixpkgs";
+    crane.follows = "rs-harbor/crane";
 
     flake-utils.url = "github:numtide/flake-utils";
 
@@ -17,6 +17,7 @@
   outputs =
     {
       self,
+      rs-harbor,
       nixpkgs,
       crane,
       flake-utils,
@@ -48,6 +49,14 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        buildCache = rs-harbor.lib.mkBuildCachePolicy {
+          inherit pkgs;
+          buildPackageSet = pkgs.buildPackages;
+          sccachePackage = pkgs.buildPackages.sccache;
+          cacheRoot = null;
+          namespaceScope = "canix-rust";
+          namespaceGeneration = 5;
+        };
 
         individualCrateArgs = commonArgs // {
           inherit cargoArtifacts;
@@ -67,14 +76,16 @@
             ];
           };
 
-        wincrab = craneLib.buildPackage (
-          individualCrateArgs
-          // {
-            pname = "wincrab";
-            cargoExtraArgs = "-p wincrab";
-            src = fileSetForCrate ./crates/wincrab;
-          }
-        );
+        wincrab = buildCache.withRustCache {
+          package = craneLib.buildPackage (
+            individualCrateArgs
+            // {
+              pname = "wincrab";
+              cargoExtraArgs = "-p wincrab";
+              src = fileSetForCrate ./crates/wincrab;
+            }
+          );
+        };
       in
       {
         checks = {
