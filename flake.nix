@@ -27,15 +27,18 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [(import rs-harbor.inputs.rust-overlay)];
+        };
 
         inherit (pkgs) lib;
 
         mkWindowsVM = import ./lib/mkWindowsVM.nix { inherit pkgs; };
         mkDebloatedISO = import ./lib/mkDebloatedISO.nix { inherit pkgs wincrab; };
 
-        toolchain = rs-harbor.lib.mkToolchain { toolchainProfile = "nightly"; };
-        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+        toolchain = rs-harbor.lib.mkToolchain { inherit pkgs; toolchainProfile = "nightly"; };
+        craneLib = toolchain.craneLib;
         src = craneLib.cleanCargoSource ./.;
 
         commonArgs = {
