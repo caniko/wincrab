@@ -755,6 +755,16 @@
           test-e2e = flake-utils.lib.mkApp {
             drv = self.packages.${system}.test-e2e;
           };
+          push-flake-inputs = rs-harbor.lib.mkAtticPush {
+            inherit pkgs;
+            adapter = rs-harbor.lib.mkAdapter {
+              attic = {
+                endpoint = "https://attic.candee.baby";
+                cache = "canix";
+              };
+            };
+            flake = ".";
+          };
           default = self.apps.${system}.wincrab;
         };
 
