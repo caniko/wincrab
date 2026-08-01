@@ -36,7 +36,6 @@ pub enum Error {
         noprompt_path: PathBuf,
         fallback_path: PathBuf,
     },
-
 }
 
 // ---------------------------------------------------------------------------
@@ -63,10 +62,7 @@ pub(crate) fn ensure_dir(path: &std::path::Path) -> Result<(), Error> {
 }
 
 /// Write `data` to `path`.
-pub(crate) fn write_file(
-    path: &std::path::Path,
-    data: impl AsRef<[u8]>,
-) -> Result<(), Error> {
+pub(crate) fn write_file(path: &std::path::Path, data: impl AsRef<[u8]>) -> Result<(), Error> {
     std::fs::write(path, data).map_err(|e| Error::Io {
         context: format!("writing {}", path.display()),
         source: e,
@@ -103,10 +99,7 @@ pub(crate) fn read_file_string(path: &std::path::Path) -> Result<String, Error> 
 /// filesystems like wimlib may not support (ENOTSUP).  This helper streams
 /// through a buffer, which always works and avoids loading entire files into
 /// memory.
-pub(crate) fn copy_file(
-    src: &std::path::Path,
-    dest: &std::path::Path,
-) -> Result<(), Error> {
+pub(crate) fn copy_file(src: &std::path::Path, dest: &std::path::Path) -> Result<(), Error> {
     use std::io::{BufReader, BufWriter, Read, Write};
 
     let src_file = std::fs::File::open(src).map_err(|e| Error::Io {
@@ -143,9 +136,7 @@ pub(crate) fn copy_file(
 }
 
 /// Run a `std::process::Command`, returning a structured error on failure.
-pub(crate) fn run_cmd(
-    cmd: &mut std::process::Command,
-) -> Result<std::process::Output, Error> {
+pub(crate) fn run_cmd(cmd: &mut std::process::Command) -> Result<std::process::Output, Error> {
     let program = format!("{:?}", cmd.get_program());
 
     // Match directly instead of `map_err` to move `program` without cloning.
@@ -296,10 +287,7 @@ mod tests {
     #[test]
     fn copy_file_src_missing_returns_error() {
         let dir = tempfile::tempdir().unwrap();
-        let result = copy_file(
-            &dir.path().join("nonexistent"),
-            &dir.path().join("dest"),
-        );
+        let result = copy_file(&dir.path().join("nonexistent"), &dir.path().join("dest"));
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::Io { .. }));
     }
@@ -354,10 +342,7 @@ mod tests {
 
     #[test]
     fn run_cmd_captures_stdout() {
-        let output = run_cmd(
-            std::process::Command::new("echo").arg("hello"),
-        )
-        .unwrap();
+        let output = run_cmd(std::process::Command::new("echo").arg("hello")).unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("hello"));
     }
@@ -368,7 +353,9 @@ mod tests {
 
     #[test]
     fn error_is_debug() {
-        let err = Error::Config { message: "test".into() };
+        let err = Error::Config {
+            message: "test".into(),
+        };
         let _ = format!("{err:?}");
     }
 
@@ -431,11 +418,7 @@ mod tests {
 
     #[test]
     fn run_cmd_exit_code_in_error() {
-        let result = run_cmd(
-            std::process::Command::new("sh")
-                .arg("-c")
-                .arg("exit 42"),
-        );
+        let result = run_cmd(std::process::Command::new("sh").arg("-c").arg("exit 42"));
         match result.unwrap_err() {
             Error::Command { code, .. } => assert_eq!(code, 42),
             other => panic!("expected Command, got: {other:?}"),
@@ -444,12 +427,7 @@ mod tests {
 
     #[test]
     fn run_cmd_with_arguments() {
-        let output = run_cmd(
-            std::process::Command::new("echo")
-                .arg("hello")
-                .arg("world"),
-        )
-        .unwrap();
+        let output = run_cmd(std::process::Command::new("echo").arg("hello").arg("world")).unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("hello world"));
     }

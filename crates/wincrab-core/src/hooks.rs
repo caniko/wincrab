@@ -2,7 +2,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{run_cmd, Error};
+use crate::error::{Error, run_cmd};
 
 pub fn run_hook(
     hook_name: &str,

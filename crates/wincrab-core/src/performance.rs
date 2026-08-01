@@ -3,7 +3,7 @@ use std::path::Path;
 use tracing::info;
 
 use crate::config::Performance;
-use crate::error::{ensure_dir, write_file, Error};
+use crate::error::{Error, ensure_dir, write_file};
 
 pub fn generate_performance_script(config: &Performance) -> String {
     let mut script = String::new();
@@ -18,10 +18,7 @@ pub fn generate_performance_script(config: &Performance) -> String {
     script
 }
 
-pub fn inject_performance_script(
-    mount_dir: &Path,
-    config: &Performance,
-) -> Result<(), Error> {
+pub fn inject_performance_script(mount_dir: &Path, config: &Performance) -> Result<(), Error> {
     if !config.high_perf_power_plan {
         return Ok(());
     }

@@ -3,7 +3,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{ensure_dir, read_file_string, run_cmd, Error};
+use crate::error::{Error, ensure_dir, read_file_string, run_cmd};
 
 /// Describes a GitHub release asset to download and cache.
 ///
@@ -80,9 +80,9 @@ pub fn download_asset(asset: &impl GitHubAsset, cache_dir: &Path) -> Result<Path
 
     let download_url = select_asset_url(&json, label, |url| asset.match_priority(url))?;
 
-    let filename = asset.output_filename().unwrap_or_else(|| {
-        download_url.rsplit('/').next().unwrap_or("download")
-    });
+    let filename = asset
+        .output_filename()
+        .unwrap_or_else(|| download_url.rsplit('/').next().unwrap_or("download"));
 
     let cached = cache_dir.join(filename);
     if cached.exists() {
@@ -159,14 +159,8 @@ mod tests {
     "browser_download_url": "https://example.com/fixed.exe"
     "browser_download_url": "https://example.com/normal.exe"
 "#;
-        let url = select_asset_url(json, "test", |u| {
-            if u.contains("normal") {
-                2
-            } else {
-                1
-            }
-        })
-        .unwrap();
+        let url =
+            select_asset_url(json, "test", |u| if u.contains("normal") { 2 } else { 1 }).unwrap();
         assert!(url.contains("normal"));
     }
 

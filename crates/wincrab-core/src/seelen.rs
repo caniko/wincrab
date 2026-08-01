@@ -3,11 +3,10 @@ use std::path::{Path, PathBuf};
 use tracing::info;
 
 use crate::config::Seelen;
-use crate::error::{copy_file, ensure_dir, write_file, Error};
+use crate::error::{Error, copy_file, ensure_dir, write_file};
 use crate::github::{self, GitHubAsset};
 
-const GITHUB_API_LATEST: &str =
-    "https://api.github.com/repos/eythaann/Seelen-UI/releases/latest";
+const GITHUB_API_LATEST: &str = "https://api.github.com/repos/eythaann/Seelen-UI/releases/latest";
 
 /// Asset descriptor for the Seelen-UI x64 setup executable.
 struct SeelenRelease;
@@ -53,11 +52,7 @@ pub fn download_seelen(work_dir: &Path, config: &Seelen) -> Result<Option<PathBu
 
 /// Inject Seelen-UI into the mounted WIM image and create a first-boot
 /// install script.
-pub fn inject_seelen(
-    mount_dir: &Path,
-    setup_exe: &Path,
-    config: &Seelen,
-) -> Result<(), Error> {
+pub fn inject_seelen(mount_dir: &Path, setup_exe: &Path, config: &Seelen) -> Result<(), Error> {
     let dest_dir = mount_dir.join("SeelenUI");
     ensure_dir(&dest_dir)?;
 
@@ -136,15 +131,11 @@ mod tests {
     #[test]
     fn match_priority_prefers_non_fixed() {
         assert_eq!(
-            SeelenRelease.match_priority(
-                "https://example.com/Seelen.UI_2.5.3_x64-setup.exe"
-            ),
+            SeelenRelease.match_priority("https://example.com/Seelen.UI_2.5.3_x64-setup.exe"),
             2
         );
         assert_eq!(
-            SeelenRelease.match_priority(
-                "https://example.com/Seelen.UI_2.5.3_x64-setup-fixed.exe"
-            ),
+            SeelenRelease.match_priority("https://example.com/Seelen.UI_2.5.3_x64-setup-fixed.exe"),
             1
         );
     }
@@ -152,9 +143,7 @@ mod tests {
     #[test]
     fn match_priority_rejects_non_x64() {
         assert_eq!(
-            SeelenRelease.match_priority(
-                "https://example.com/Seelen.UI_2.5.3_arm64-setup.exe"
-            ),
+            SeelenRelease.match_priority("https://example.com/Seelen.UI_2.5.3_arm64-setup.exe"),
             0
         );
     }

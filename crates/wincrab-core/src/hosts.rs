@@ -4,7 +4,7 @@ use std::path::Path;
 use tracing::info;
 
 use crate::config::Telemetry;
-use crate::error::{ensure_dir, write_file, Error};
+use crate::error::{Error, ensure_dir, write_file};
 
 const TELEMETRY_DOMAINS: &[&str] = &[
     "vortex.data.microsoft.com",
@@ -50,7 +50,11 @@ const TELEMETRY_DOMAINS: &[&str] = &[
 ];
 
 pub fn inject_telemetry_hosts(mount_dir: &Path, config: &Telemetry) -> Result<(), Error> {
-    let builtin_count = if config.block_telemetry_hosts { TELEMETRY_DOMAINS.len() } else { 0 };
+    let builtin_count = if config.block_telemetry_hosts {
+        TELEMETRY_DOMAINS.len()
+    } else {
+        0
+    };
     let extra_count = config.extra_blocked_hosts.len();
 
     if builtin_count + extra_count == 0 {
@@ -116,9 +120,7 @@ mod tests {
         };
         let result = inject_telemetry_hosts(dir.path(), &config);
         assert!(result.is_ok());
-        let hosts = dir
-            .path()
-            .join("Windows/System32/drivers/etc/hosts");
+        let hosts = dir.path().join("Windows/System32/drivers/etc/hosts");
         assert!(!hosts.exists());
     }
 
@@ -128,9 +130,7 @@ mod tests {
         let config = Telemetry::default();
         inject_telemetry_hosts(dir.path(), &config).unwrap();
 
-        let hosts = dir
-            .path()
-            .join("Windows/System32/drivers/etc/hosts");
+        let hosts = dir.path().join("Windows/System32/drivers/etc/hosts");
         let content = std::fs::read_to_string(&hosts).unwrap();
         assert!(content.contains("0.0.0.0 vortex.data.microsoft.com"));
         assert!(content.contains("0.0.0.0 telemetry.microsoft.com"));
@@ -146,9 +146,7 @@ mod tests {
         };
         inject_telemetry_hosts(dir.path(), &config).unwrap();
 
-        let hosts = dir
-            .path()
-            .join("Windows/System32/drivers/etc/hosts");
+        let hosts = dir.path().join("Windows/System32/drivers/etc/hosts");
         let content = std::fs::read_to_string(&hosts).unwrap();
         assert!(content.contains("0.0.0.0 custom.tracker.example.com"));
     }
@@ -178,9 +176,7 @@ mod tests {
         };
         inject_telemetry_hosts(dir.path(), &config).unwrap();
 
-        let hosts = dir
-            .path()
-            .join("Windows/System32/drivers/etc/hosts");
+        let hosts = dir.path().join("Windows/System32/drivers/etc/hosts");
         let content = std::fs::read_to_string(&hosts).unwrap();
         assert!(content.contains("0.0.0.0 custom.example.com"));
         assert!(!content.contains("vortex.data.microsoft.com"));

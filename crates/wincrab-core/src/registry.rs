@@ -23,10 +23,7 @@ impl HivePaths {
             software: config_dir.join("SOFTWARE"),
             system: config_dir.join("SYSTEM"),
             default: config_dir.join("DEFAULT"),
-            ntuser: mount_dir
-                .join("Users")
-                .join("Default")
-                .join("NTUSER.DAT"),
+            ntuser: mount_dir.join("Users").join("Default").join("NTUSER.DAT"),
         }
     }
 
@@ -37,9 +34,7 @@ impl HivePaths {
             ("DEFAULT", &self.default),
         ] {
             if !path.exists() {
-                return Err(Error::HiveNotFound {
-                    path: path.clone(),
-                });
+                return Err(Error::HiveNotFound { path: path.clone() });
             }
         }
         if !self.ntuser.exists() {
@@ -275,7 +270,10 @@ fn apply_privacy_settings(hives: &HivePaths, config: &Config) -> Result<(), Erro
         merge_reg_values(
             &hives.ntuser,
             "\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy",
-            &[("TailoredExperiencesWithDiagnosticDataEnabled", "dword:00000000")],
+            &[(
+                "TailoredExperiencesWithDiagnosticDataEnabled",
+                "dword:00000000",
+            )],
         )?;
     }
 
@@ -373,11 +371,7 @@ fn apply_edge_policies(hives: &HivePaths, config: &Config) -> Result<(), Error> 
         vals.push(("SearchbarAllowed", "dword:00000000"));
     }
 
-    run_hivexsh_setval(
-        &hives.software,
-        "\\Policies\\Microsoft\\Edge",
-        &vals,
-    )?;
+    run_hivexsh_setval(&hives.software, "\\Policies\\Microsoft\\Edge", &vals)?;
 
     Ok(())
 }
@@ -434,11 +428,7 @@ fn apply_visual_unique_keys(hives: &HivePaths) -> Result<(), Error> {
 /// Active Setup is HKLM-based and runs once per new user at first logon,
 /// making it more reliable than RunOnce (which lives in NTUSER.DAT and
 /// can itself be overridden during profile creation).
-fn inject_user_fixup(
-    mount_dir: &Path,
-    hives: &HivePaths,
-    config: &Config,
-) -> Result<(), Error> {
+fn inject_user_fixup(mount_dir: &Path, hives: &HivePaths, config: &Config) -> Result<(), Error> {
     let mut lines: Vec<&str> = vec!["@echo off"];
 
     // Visual performance fixups
@@ -560,10 +550,7 @@ fn apply_explorer_advanced_values(hives: &HivePaths, config: &Config) -> Result<
 
 /// Merge values into `HKCU\...\ContentDeliveryManager` without destroying
 /// Windows' default values.  Uses `hivexregedit --merge`.
-fn apply_content_delivery_manager_values(
-    hives: &HivePaths,
-    config: &Config,
-) -> Result<(), Error> {
+fn apply_content_delivery_manager_values(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     let mut vals: SmallVec<[(&str, &str); 8]> = SmallVec::new();
 
     // From visuals — lock screen tips
@@ -587,7 +574,9 @@ fn apply_content_delivery_manager_values(
 
     // From OOBE — finish setup nag
     if config.oobe.skip_finish_setup_nag
-        && !vals.iter().any(|(n, _)| *n == "SubscribedContent-310093Enabled")
+        && !vals
+            .iter()
+            .any(|(n, _)| *n == "SubscribedContent-310093Enabled")
     {
         vals.push(("SubscribedContent-310093Enabled", "dword:00000000"));
     }
@@ -614,10 +603,7 @@ fn apply_content_delivery_manager_values(
 /// Removing task XML files from the WIM doesn't persist — Windows recreates
 /// them during install. Instead, we disable them at the registry level by
 /// setting `Enabled = 0` in the TaskCache tree entries.
-fn disable_scheduled_tasks_via_registry(
-    hives: &HivePaths,
-    config: &Config,
-) -> Result<(), Error> {
+fn disable_scheduled_tasks_via_registry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     let tasks = &config.scheduled_tasks;
 
     let mut task_paths: SmallVec<[&str; 16]> = SmallVec::new();
@@ -649,10 +635,7 @@ fn disable_scheduled_tasks_via_registry(
     }
 
     if tasks.remove_maps_task {
-        task_paths.extend_from_slice(&[
-            "Maps\\MapsUpdateTask",
-            "Maps\\MapsToastTask",
-        ]);
+        task_paths.extend_from_slice(&["Maps\\MapsUpdateTask", "Maps\\MapsToastTask"]);
     }
 
     if tasks.remove_feedback_tasks {
@@ -672,7 +655,8 @@ fn disable_scheduled_tasks_via_registry(
         "disabling scheduled tasks via TaskCache registry"
     );
 
-    let base = "\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\Microsoft\\Windows";
+    let base =
+        "\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\Microsoft\\Windows";
 
     // Batch all task disables into a single hivexsh session to avoid
     // spawning one process per task (40-60% faster for the registry phase).
@@ -995,11 +979,7 @@ fn apply_performance_registry(hives: &HivePaths, config: &Config) -> Result<(), 
         if perf.ntfs_disable_8dot3 {
             vals.push(("NtfsDisable8dot3NameCreation", "dword:00000001"));
         }
-        merge_reg_values(
-            &hives.system,
-            "\\ControlSet001\\Control\\FileSystem",
-            &vals,
-        )?;
+        merge_reg_values(&hives.system, "\\ControlSet001\\Control\\FileSystem", &vals)?;
     }
 
     // Faster shutdown — NTUSER values
@@ -1306,7 +1286,7 @@ fn register_active_setup(
         &format!("\\Microsoft\\Active Setup\\Installed Components\\{component_id}"),
         &[
             ("", &display_val),            // (Default) = display name
-            ("StubPath", &cmd_val),         // command to run
+            ("StubPath", &cmd_val),        // command to run
             ("Version", "string:1,0,0,0"), // version stamp
         ],
     )?;
@@ -1601,7 +1581,6 @@ fn ensure_cd_paths_exist(hive_path: &Path, commands: &str) -> Result<(), Error> 
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1637,10 +1616,7 @@ mod tests {
         let pairs = key_path_components("\\A B\\C D");
         assert_eq!(
             pairs.as_slice(),
-            &[
-                ("\\".into(), "A B".into()),
-                ("\\A B".into(), "C D".into()),
-            ]
+            &[("\\".into(), "A B".into()), ("\\A B".into(), "C D".into()),]
         );
     }
 
@@ -1775,7 +1751,12 @@ mod tests {
 
     #[test]
     fn validate_registry_component_allows_spaces_and_special() {
-        assert!(validate_registry_component("Application Experience\\Microsoft Compatibility Appraiser").is_ok());
+        assert!(
+            validate_registry_component(
+                "Application Experience\\Microsoft Compatibility Appraiser"
+            )
+            .is_ok()
+        );
         assert!(validate_registry_component("dword:00000001").is_ok());
     }
 }

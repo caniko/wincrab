@@ -3,7 +3,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{ensure_dir, run_cmd, Error};
+use crate::error::{Error, ensure_dir, run_cmd};
 
 /// Repack the modified ISO tree into a new UEFI-bootable ISO.
 ///
@@ -20,10 +20,7 @@ use crate::error::{ensure_dir, run_cmd, Error};
 /// Both El Torito (for firmware boot) AND UDF (for the Windows Boot Manager)
 /// are required — OVMF has no UDF driver, and the Boot Manager has no
 /// ISO9660 driver.
-pub fn repack_iso(
-    staging_dir: &Path,
-    output_iso: &Path,
-) -> Result<(), Error> {
+pub fn repack_iso(staging_dir: &Path, output_iso: &Path) -> Result<(), Error> {
     // Determine which EFI boot image to use.
     let efisys_noprompt = staging_dir
         .join("efi")
