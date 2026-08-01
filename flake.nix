@@ -37,7 +37,11 @@
         mkWindowsVM = import ./lib/mkWindowsVM.nix { inherit pkgs; };
         mkDebloatedISO = import ./lib/mkDebloatedISO.nix { inherit pkgs wincrab; };
 
-        toolchain = rs-harbor.lib.mkToolchain { inherit pkgs; toolchainProfile = "nightly"; };
+        toolchain = rs-harbor.lib.mkToolchain {
+          inherit pkgs;
+          toolchainProfile = "nightly";
+          cache.cacheRoot = "/tmp/sccache";
+        };
         craneLib = toolchain.craneLib;
         src = craneLib.cleanCargoSource ./.;
 
