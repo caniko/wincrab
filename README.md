@@ -1,5 +1,11 @@
 # wincrab
 
+<!-- simit:badges:start -->
+
+[![CI](https://img.shields.io/badge/CI-managed-2088ff)](.github/workflows/ci.yaml) ![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)
+
+<!-- simit:badges:end -->
+
 A Rust CLI tool that builds debloated Windows 11 ISOs entirely from Linux.
 
 wincrab orchestrates Linux-native tools (`7z`, `wimlib-imagex`, `hivexsh`,
