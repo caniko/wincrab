@@ -153,8 +153,10 @@ mergerfs = false
 // ===========================================================================
 
 mod debloat_integration {
-    use wincrab_core::debloat::{prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks};
     use wincrab_core::config::{AppRemoval, ScheduledTasks, Seelen};
+    use wincrab_core::debloat::{
+        prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks,
+    };
 
     /// Build a realistic Windows image directory structure.
     fn build_realistic_mount(mount: &std::path::Path) {
@@ -224,8 +226,16 @@ mod debloat_integration {
         // Should remove TikTok, CandyCrush, BingWeather, Xbox (2), Teams,
         // Outlook, Mail, DevHome, PhoneLink (2), OneDrive (2 files)
         // + provisioning entries for the first 5 packages.
-        assert!(stats.dirs_removed >= 8, "dirs_removed = {}", stats.dirs_removed);
-        assert!(stats.files_removed >= 2, "files_removed = {}", stats.files_removed);
+        assert!(
+            stats.dirs_removed >= 8,
+            "dirs_removed = {}",
+            stats.dirs_removed
+        );
+        assert!(
+            stats.files_removed >= 2,
+            "files_removed = {}",
+            stats.files_removed
+        );
 
         // Calculator and Notepad should survive.
         let remaining: Vec<_> = std::fs::read_dir(mount.join("Program Files/WindowsApps"))
@@ -281,7 +291,12 @@ mod debloat_integration {
             .filter_map(|e| e.ok())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert!(remaining[0].file_name().to_string_lossy().contains("Calculator"));
+        assert!(
+            remaining[0]
+                .file_name()
+                .to_string_lossy()
+                .contains("Calculator")
+        );
     }
 }
 
@@ -290,8 +305,8 @@ mod debloat_integration {
 // ===========================================================================
 
 mod oobe_integration {
-    use wincrab_core::oobe::inject_autounattend;
     use wincrab_core::config::Oobe;
+    use wincrab_core::oobe::inject_autounattend;
 
     #[test]
     fn autounattend_is_valid_xml_ish() {
@@ -382,8 +397,8 @@ mod pipeline_integration {
 // ===========================================================================
 
 mod seelen_integration {
-    use wincrab_core::seelen::inject_seelen;
     use wincrab_core::config::Seelen;
+    use wincrab_core::seelen::inject_seelen;
 
     #[test]
     fn inject_creates_complete_install_package() {
@@ -423,8 +438,8 @@ mod seelen_integration {
 // ===========================================================================
 
 mod driver_integration {
-    use wincrab_core::drivers::{inject_drivers, DriverPaths};
     use wincrab_core::config::Drivers;
+    use wincrab_core::drivers::{DriverPaths, inject_drivers};
 
     #[test]
     fn inject_all_drivers() {
@@ -504,7 +519,10 @@ mod driver_integration {
             winfsp: None,
             mergerfs: None,
         };
-        let config = Drivers { btrfs: true, ..Default::default() };
+        let config = Drivers {
+            btrfs: true,
+            ..Default::default()
+        };
 
         inject_drivers(&mount, &paths, &config).unwrap();
 
@@ -535,7 +553,10 @@ mod driver_integration {
             winfsp: None,
             mergerfs: None,
         };
-        let config = Drivers { ext4: true, ..Default::default() };
+        let config = Drivers {
+            ext4: true,
+            ..Default::default()
+        };
 
         inject_drivers(&mount, &paths, &config).unwrap();
 
@@ -551,10 +572,12 @@ mod driver_integration {
 // ===========================================================================
 
 mod cross_module_integration {
-    use wincrab_core::config::{AppRemoval, ScheduledTasks, Seelen};
-    use wincrab_core::debloat::{prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks};
-    use wincrab_core::oobe::inject_autounattend;
     use wincrab_core::config::Oobe;
+    use wincrab_core::config::{AppRemoval, ScheduledTasks, Seelen};
+    use wincrab_core::debloat::{
+        prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks,
+    };
+    use wincrab_core::oobe::inject_autounattend;
 
     /// Build a complete Windows image mock with apps, tasks, and system files.
     fn build_complete_mount(mount: &std::path::Path) {
@@ -763,8 +786,8 @@ mod config_validation_integration {
 // ===========================================================================
 
 mod seelen_config_integration {
-    use wincrab_core::seelen::inject_seelen;
     use wincrab_core::config::Seelen;
+    use wincrab_core::seelen::inject_seelen;
 
     #[test]
     fn inject_seelen_with_minimal_config() {
@@ -832,7 +855,7 @@ mod seelen_config_integration {
 // ===========================================================================
 
 mod profile_integration {
-    use wincrab_core::profiles::{load_profile, merge_with_overrides, PROFILE_NAMES};
+    use wincrab_core::profiles::{PROFILE_NAMES, load_profile, merge_with_overrides};
 
     #[test]
     fn all_profiles_validate() {
@@ -891,11 +914,7 @@ mod profile_integration {
     #[test]
     fn merge_overrides_hooks() {
         let base = load_profile("minimal").unwrap();
-        let merged = merge_with_overrides(
-            base,
-            "[hooks]\npre_extract = \"echo hello\"\n",
-        )
-        .unwrap();
+        let merged = merge_with_overrides(base, "[hooks]\npre_extract = \"echo hello\"\n").unwrap();
         assert_eq!(merged.hooks.pre_extract.as_deref(), Some("echo hello"));
         assert!(merged.hooks.post_build.is_none());
     }
@@ -915,11 +934,8 @@ mod profile_integration {
     #[test]
     fn merge_overrides_oobe_edition() {
         let base = load_profile("enterprise").unwrap();
-        let merged = merge_with_overrides(
-            base,
-            "[oobe]\nconvert_edition = \"Professional\"\n",
-        )
-        .unwrap();
+        let merged =
+            merge_with_overrides(base, "[oobe]\nconvert_edition = \"Professional\"\n").unwrap();
         assert_eq!(merged.oobe.convert_edition.as_deref(), Some("Professional"));
     }
 }
@@ -947,18 +963,13 @@ mod hosts_integration {
         let dir = tempfile::tempdir().unwrap();
         let config = Telemetry {
             block_telemetry_hosts: true,
-            extra_blocked_hosts: vec![
-                "tracking.example.com".into(),
-                "ads.example.net".into(),
-            ],
+            extra_blocked_hosts: vec!["tracking.example.com".into(), "ads.example.net".into()],
             ..Telemetry::default()
         };
         inject_telemetry_hosts(dir.path(), &config).unwrap();
 
-        let content = std::fs::read_to_string(
-            dir.path().join("Windows/System32/drivers/etc/hosts"),
-        )
-        .unwrap();
+        let content =
+            std::fs::read_to_string(dir.path().join("Windows/System32/drivers/etc/hosts")).unwrap();
         assert!(content.contains("0.0.0.0 tracking.example.com"));
         assert!(content.contains("0.0.0.0 ads.example.net"));
         assert!(content.contains("wincrab telemetry block"));
@@ -989,10 +1000,8 @@ mod hosts_integration {
         let config = Telemetry::default();
         inject_telemetry_hosts(dir.path(), &config).unwrap();
 
-        let content = std::fs::read_to_string(
-            dir.path().join("Windows/System32/drivers/etc/hosts"),
-        )
-        .unwrap();
+        let content =
+            std::fs::read_to_string(dir.path().join("Windows/System32/drivers/etc/hosts")).unwrap();
         assert!(content.contains("# --- wincrab telemetry block ---"));
         assert!(content.contains("# --- end wincrab telemetry block ---"));
     }
@@ -1036,8 +1045,7 @@ mod performance_integration {
         inject_performance_script(dir.path(), &config).unwrap();
         inject_performance_script(dir.path(), &config).unwrap();
 
-        let content =
-            std::fs::read_to_string(dir.path().join("wincrab/performance.ps1")).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("wincrab/performance.ps1")).unwrap();
         assert!(content.contains("powercfg"));
     }
 }
@@ -1047,8 +1055,8 @@ mod performance_integration {
 // ===========================================================================
 
 mod manifest_integration {
-    use wincrab_core::manifest::{compute_sha256, write_manifest, BuildManifest};
     use std::borrow::Cow;
+    use wincrab_core::manifest::{BuildManifest, compute_sha256, write_manifest};
 
     #[test]
     fn manifest_roundtrip_with_cow_borrowed() {
@@ -1287,7 +1295,10 @@ dest = "wincrab/custom.ps1"
 
         let cfg = Config::from_file(&path).unwrap();
         assert_eq!(cfg.inject.files.len(), 2);
-        assert_eq!(cfg.inject.files[0].dest, "Users/Public/Pictures/wallpaper.jpg");
+        assert_eq!(
+            cfg.inject.files[0].dest,
+            "Users/Public/Pictures/wallpaper.jpg"
+        );
         assert_eq!(cfg.inject.files[1].dest, "wincrab/custom.ps1");
     }
 
@@ -1477,10 +1488,7 @@ mod oobe_new_features_integration {
     fn autounattend_with_first_logon_commands() {
         let dir = tempfile::tempdir().unwrap();
         let config = Oobe {
-            first_logon_commands: vec![
-                "Get-Date".into(),
-                "Write-Host 'Hello'".into(),
-            ],
+            first_logon_commands: vec!["Get-Date".into(), "Write-Host 'Hello'".into()],
             ..Oobe::default()
         };
         inject_autounattend(dir.path(), &config).unwrap();

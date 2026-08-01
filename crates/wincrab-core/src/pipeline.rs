@@ -6,12 +6,12 @@ use crate::config::Config;
 use crate::debloat::{prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks};
 use crate::drivers::{download_drivers, inject_drivers};
 use crate::edition::convert_edition;
-use crate::error::{ensure_dir, file_size_or_zero, Error};
+use crate::error::{Error, ensure_dir, file_size_or_zero};
 use crate::esd::convert_esd_to_wim;
 use crate::extract::{extract_iso, find_install_image};
 use crate::hooks::run_hook;
 use crate::hosts::inject_telemetry_hosts;
-use crate::manifest::{compute_sha256, write_manifest, BuildManifest};
+use crate::manifest::{BuildManifest, compute_sha256, write_manifest};
 use crate::mount::WimMount;
 use crate::oobe::inject_autounattend;
 use crate::performance::inject_performance_script;
@@ -324,9 +324,9 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), Error> {
     for entry in walkdir::WalkDir::new(src).min_depth(1) {
         let entry = entry.map_err(|e| Error::Io {
             context: format!("walking {}", src.display()),
-            source: e.into_io_error().unwrap_or_else(|| {
-                std::io::Error::other("walkdir error")
-            }),
+            source: e
+                .into_io_error()
+                .unwrap_or_else(|| std::io::Error::other("walkdir error")),
         })?;
 
         let relative = entry.path().strip_prefix(src).map_err(|_| Error::Io {
@@ -498,8 +498,7 @@ mod tests {
         };
 
         inject_custom_files(&mount, &config).unwrap();
-        let content =
-            std::fs::read_to_string(mount.join("Users/Public/Desktop/test.txt")).unwrap();
+        let content = std::fs::read_to_string(mount.join("Users/Public/Desktop/test.txt")).unwrap();
         assert_eq!(content, "hello");
     }
 

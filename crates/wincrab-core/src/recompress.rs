@@ -3,7 +3,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{file_size_or_zero, remove_file, run_cmd, Error};
+use crate::error::{Error, file_size_or_zero, remove_file, run_cmd};
 
 /// Re-export the WIM image with solid LZX compression to reduce ISO size.
 ///

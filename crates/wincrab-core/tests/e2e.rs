@@ -9,14 +9,16 @@
 // ===========================================================================
 
 mod pipeline_simulation {
+    use wincrab_core::Config;
     use wincrab_core::config::*;
-    use wincrab_core::debloat::{prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks};
-    use wincrab_core::drivers::{inject_drivers, DriverPaths};
+    use wincrab_core::debloat::{
+        prune_appx_packages, prune_seelen_replacements, remove_scheduled_tasks,
+    };
+    use wincrab_core::drivers::{DriverPaths, inject_drivers};
     use wincrab_core::extract::find_install_image;
     use wincrab_core::oobe::inject_autounattend;
     use wincrab_core::pipeline::WorkDirs;
     use wincrab_core::seelen::inject_seelen;
-    use wincrab_core::Config;
 
     /// Build a comprehensive mock of an extracted Windows 11 ISO.
     fn build_full_staging(staging: &std::path::Path) {
@@ -147,38 +149,67 @@ mod pipeline_simulation {
 
         // Phase 5: Prune apps.
         let app_stats = prune_appx_packages(&work_dirs.wim_mount, &config.apps).unwrap();
-        assert!(app_stats.dirs_removed >= 10, "dirs_removed = {}", app_stats.dirs_removed);
+        assert!(
+            app_stats.dirs_removed >= 10,
+            "dirs_removed = {}",
+            app_stats.dirs_removed
+        );
 
         // Phase 6: Prune Seelen-replaced components.
         let seelen_stats = prune_seelen_replacements(&work_dirs.wim_mount, &config.seelen).unwrap();
-        assert!(seelen_stats.dirs_removed >= 4, "seelen dirs = {}", seelen_stats.dirs_removed);
+        assert!(
+            seelen_stats.dirs_removed >= 4,
+            "seelen dirs = {}",
+            seelen_stats.dirs_removed
+        );
 
         // Phase 7: Remove scheduled tasks.
-        let task_stats = remove_scheduled_tasks(&work_dirs.wim_mount, &config.scheduled_tasks).unwrap();
-        assert!(task_stats.files_removed >= 5, "task files = {}", task_stats.files_removed);
+        let task_stats =
+            remove_scheduled_tasks(&work_dirs.wim_mount, &config.scheduled_tasks).unwrap();
+        assert!(
+            task_stats.files_removed >= 5,
+            "task files = {}",
+            task_stats.files_removed
+        );
 
         // Phase 8: Inject Seelen-UI (simulated).
         let fake_setup = dir.path().join("seelen-setup.exe");
         std::fs::write(&fake_setup, b"MZ\x90\x00fake Seelen PE").unwrap();
         inject_seelen(&work_dirs.wim_mount, &fake_setup, &config.seelen).unwrap();
-        assert!(work_dirs.wim_mount.join("SeelenUI/Seelen.UI-setup.exe").exists());
+        assert!(
+            work_dirs
+                .wim_mount
+                .join("SeelenUI/Seelen.UI-setup.exe")
+                .exists()
+        );
         assert!(work_dirs.wim_mount.join("SeelenUI/install.ps1").exists());
 
         // Phase 9: Inject autounattend.xml.
         inject_autounattend(&work_dirs.staging, &config.oobe).unwrap();
-        let autounattend = std::fs::read_to_string(work_dirs.staging.join("autounattend.xml")).unwrap();
+        let autounattend =
+            std::fs::read_to_string(work_dirs.staging.join("autounattend.xml")).unwrap();
         assert!(autounattend.contains("<?xml"));
         assert!(autounattend.contains("BypassNRO"));
 
         // Verify survivors.
-        let remaining: Vec<_> = std::fs::read_dir(work_dirs.wim_mount.join("Program Files/WindowsApps"))
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .collect();
-        assert!(remaining.iter().any(|n| n.contains("Calculator")), "Calculator should survive");
-        assert!(remaining.iter().any(|n| n.contains("Notepad")), "Notepad should survive");
-        assert!(remaining.iter().any(|n| n.contains("Terminal")), "Terminal should survive");
+        let remaining: Vec<_> =
+            std::fs::read_dir(work_dirs.wim_mount.join("Program Files/WindowsApps"))
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .collect();
+        assert!(
+            remaining.iter().any(|n| n.contains("Calculator")),
+            "Calculator should survive"
+        );
+        assert!(
+            remaining.iter().any(|n| n.contains("Notepad")),
+            "Notepad should survive"
+        );
+        assert!(
+            remaining.iter().any(|n| n.contains("Terminal")),
+            "Terminal should survive"
+        );
     }
 
     #[test]
@@ -381,8 +412,14 @@ mod pipeline_simulation {
 
         for (seelen, drivers, expected) in configs {
             let config = Config {
-                seelen: Seelen { bundle: seelen, ..Default::default() },
-                drivers: Drivers { btrfs: drivers, ..Default::default() },
+                seelen: Seelen {
+                    bundle: seelen,
+                    ..Default::default()
+                },
+                drivers: Drivers {
+                    btrfs: drivers,
+                    ..Default::default()
+                },
                 ..Config::default()
             };
             let total = 9
@@ -468,7 +505,11 @@ skip_microsoft_account = true
         let stats = wincrab_core::debloat::prune_appx_packages(&mount, &config.apps).unwrap();
         // TikTok (bloatware) + MyCustomBloat (extra) = 2 removed.
         // Xbox should NOT be removed (disabled).
-        assert_eq!(stats.dirs_removed, 2, "dirs_removed = {}", stats.dirs_removed);
+        assert_eq!(
+            stats.dirs_removed, 2,
+            "dirs_removed = {}",
+            stats.dirs_removed
+        );
 
         let remaining: Vec<_> = std::fs::read_dir(&apps_dir)
             .unwrap()
@@ -486,15 +527,15 @@ skip_microsoft_account = true
 // ===========================================================================
 
 mod new_features_e2e {
+    use std::borrow::Cow;
+    use wincrab_core::Config;
     use wincrab_core::config::*;
     use wincrab_core::debloat::prune_appx_packages;
     use wincrab_core::hosts::inject_telemetry_hosts;
-    use wincrab_core::manifest::{compute_sha256, write_manifest, BuildManifest};
+    use wincrab_core::manifest::{BuildManifest, compute_sha256, write_manifest};
     use wincrab_core::oobe::inject_autounattend;
     use wincrab_core::performance::inject_performance_script;
     use wincrab_core::pipeline::WorkDirs;
-    use wincrab_core::Config;
-    use std::borrow::Cow;
 
     /// Build a comprehensive mock of a mounted WIM with hosts file.
     fn build_mount_with_hosts(mount: &std::path::Path) {
@@ -517,7 +558,11 @@ mod new_features_e2e {
         // Hosts file
         let etc = mount.join("Windows/System32/drivers/etc");
         std::fs::create_dir_all(&etc).unwrap();
-        std::fs::write(etc.join("hosts"), "# Windows hosts file\n127.0.0.1 localhost\n").unwrap();
+        std::fs::write(
+            etc.join("hosts"),
+            "# Windows hosts file\n127.0.0.1 localhost\n",
+        )
+        .unwrap();
     }
 
     #[test]
@@ -536,28 +581,21 @@ mod new_features_e2e {
 
         // Phase: Block telemetry hosts
         inject_telemetry_hosts(mount, &config.telemetry).unwrap();
-        let hosts_content = std::fs::read_to_string(
-            mount.join("Windows/System32/drivers/etc/hosts"),
-        )
-        .unwrap();
+        let hosts_content =
+            std::fs::read_to_string(mount.join("Windows/System32/drivers/etc/hosts")).unwrap();
         assert!(hosts_content.contains("127.0.0.1 localhost"));
         assert!(hosts_content.contains("0.0.0.0 telemetry.microsoft.com"));
         assert!(hosts_content.contains("0.0.0.0 vortex.data.microsoft.com"));
 
         // Phase: Inject performance script
         inject_performance_script(mount, &config.performance).unwrap();
-        let perf_script = std::fs::read_to_string(
-            mount.join("wincrab/performance.ps1"),
-        )
-        .unwrap();
+        let perf_script = std::fs::read_to_string(mount.join("wincrab/performance.ps1")).unwrap();
         assert!(perf_script.contains("powercfg"));
 
         // Phase: Inject autounattend
         inject_autounattend(&work_dirs.staging, &config.oobe).unwrap();
-        let autounattend = std::fs::read_to_string(
-            work_dirs.staging.join("autounattend.xml"),
-        )
-        .unwrap();
+        let autounattend =
+            std::fs::read_to_string(work_dirs.staging.join("autounattend.xml")).unwrap();
         assert!(autounattend.contains("BypassNRO"));
         assert!(autounattend.contains("BypassTPMCheck"));
     }
@@ -590,7 +628,10 @@ mod new_features_e2e {
                     },
                 ],
             },
-            seelen: Seelen { bundle: false, ..Default::default() },
+            seelen: Seelen {
+                bundle: false,
+                ..Default::default()
+            },
             ..Config::default()
         };
 
@@ -701,10 +742,9 @@ mod new_features_e2e {
             // Telemetry host blocking varies by profile.
             if config.telemetry.block_telemetry_hosts {
                 inject_telemetry_hosts(&mount, &config.telemetry).unwrap();
-                let hosts = std::fs::read_to_string(
-                    mount.join("Windows/System32/drivers/etc/hosts"),
-                )
-                .unwrap();
+                let hosts =
+                    std::fs::read_to_string(mount.join("Windows/System32/drivers/etc/hosts"))
+                        .unwrap();
                 assert!(hosts.contains("telemetry.microsoft.com"));
             }
 
@@ -783,7 +823,10 @@ mod new_features_e2e {
     fn phase_counting_with_all_new_features() {
         // Verify phase counting accounts for all new features.
         let config = Config {
-            drivers: Drivers { ext4: true, ..Default::default() },
+            drivers: Drivers {
+                ext4: true,
+                ..Default::default()
+            },
             inject: Inject {
                 files: vec![InjectEntry {
                     src: std::path::PathBuf::from("/tmp/test"),
@@ -809,9 +852,21 @@ mod new_features_e2e {
             } else {
                 0
             }
-            + if config.performance.high_perf_power_plan { 1 } else { 0 }
-            + if config.oobe.convert_edition.is_some() { 1 } else { 0 }
-            + if !config.inject.files.is_empty() { 1 } else { 0 };
+            + if config.performance.high_perf_power_plan {
+                1
+            } else {
+                0
+            }
+            + if config.oobe.convert_edition.is_some() {
+                1
+            } else {
+                0
+            }
+            + if !config.inject.files.is_empty() {
+                1
+            } else {
+                0
+            };
 
         assert_eq!(expected, 17);
     }
@@ -838,7 +893,10 @@ post_build = "echo 'Build complete!'"
         assert_eq!(merged.oobe.convert_edition.as_deref(), Some("Professional"));
         assert_eq!(merged.oobe.local_account_name.as_deref(), Some("Gamer"));
         assert!(merged.oobe.auto_logon);
-        assert_eq!(merged.hooks.post_build.as_deref(), Some("echo 'Build complete!'"));
+        assert_eq!(
+            merged.hooks.post_build.as_deref(),
+            Some("echo 'Build complete!'")
+        );
         // Gaming profile defaults preserved.
         assert!(!merged.apps.remove_xbox);
         assert!(merged.performance.high_perf_power_plan);
