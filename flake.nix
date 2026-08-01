@@ -57,7 +57,7 @@
           inherit pkgs;
           buildPackageSet = pkgs.buildPackages;
           sccachePackage = pkgs.buildPackages.sccache;
-          cacheRoot = null;
+          cacheRoot = "/tmp/sccache";
           namespaceScope = "canix-rust";
           namespaceGeneration = 5;
         };
