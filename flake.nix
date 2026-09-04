@@ -2,9 +2,10 @@
   description = "wincrab — debloated Windows 11 ISO builder for Linux";
 
   inputs = {
-    rs-harbor.url = "git+ssh://git@github.com/caniko/rs-harbor.git?ref=trunk&rev=05cc4f162b55fa904b687db1821e2463fa813e50";
-    nixpkgs.follows = "rs-harbor/nixpkgs";
-    crane.follows = "rs-harbor/crane";
+    harbor-rs.url = "git+ssh://git@github.com/caniko/harbor-rs.git?ref=trunk&rev=05cc4f162b55fa904b687db1821e2463fa813e50";
+    rs-harbor.follows = "harbor-rs";
+    nixpkgs.follows = "harbor-rs/nixpkgs";
+    crane.follows = "harbor-rs/crane";
 
     flake-utils.url = "github:numtide/flake-utils";
 
@@ -17,7 +18,7 @@
   outputs =
     {
       self,
-      rs-harbor,
+      harbor-rs,
       nixpkgs,
       crane,
       flake-utils,
@@ -29,7 +30,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [(import rs-harbor.inputs.rust-overlay)];
+          overlays = [(import harbor-rs.inputs.rust-overlay)];
         };
 
         inherit (pkgs) lib;
@@ -37,7 +38,7 @@
         mkWindowsVM = import ./lib/mkWindowsVM.nix { inherit pkgs; };
         mkDebloatedISO = import ./lib/mkDebloatedISO.nix { inherit pkgs wincrab; };
 
-        toolchain = rs-harbor.lib.mkToolchain { inherit pkgs; toolchainProfile = "nightly"; };
+        toolchain = harbor-rs.lib.mkToolchain { inherit pkgs; toolchainProfile = "nightly"; };
         craneLib = toolchain.craneLib;
         src = craneLib.cleanCargoSource ./.;
 
@@ -53,7 +54,7 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-        buildCache = rs-harbor.lib.mkBuildCachePolicy {
+        buildCache = harbor-rs.lib.mkBuildCachePolicy {
           inherit pkgs;
           buildPackageSet = pkgs.buildPackages;
           sccachePackage = pkgs.buildPackages.sccache;
