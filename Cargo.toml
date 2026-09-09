@@ -23,3 +23,9 @@ walkdir = "2"
 
 [workspace.metadata.crane]
 name = "wincrab-workspace"
+
+[workspace.metadata.harbor-ci]
+docs = true
+audit = true
+deny = true
+package = true

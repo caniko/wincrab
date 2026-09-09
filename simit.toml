@@ -1,0 +1,7 @@
+[ci]
+provider = "crow"
+platform = "forgejo"
+runtime = "nix"
+runner = "codefloe-global"
+workspace = true
+check_command = "harbor-ci full"
