@@ -5,7 +5,7 @@ use tracing::{info, warn};
 use walkdir::WalkDir;
 
 use crate::config::{AppRemoval, ScheduledTasks, Seelen};
-use crate::error::{remove_dir_all, remove_file, Error};
+use crate::error::{Error, remove_dir_all, remove_file};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -93,18 +93,12 @@ const MAIL_PATTERNS: &[&str] = &["microsoft.windowscommunicationsapps"];
 
 const DEV_HOME_PATTERNS: &[&str] = &["Microsoft.Windows.DevHome"];
 
-const PHONE_LINK_PATTERNS: &[&str] = &[
-    "Microsoft.YourPhone",
-    "MicrosoftWindows.CrossDevice",
-];
+const PHONE_LINK_PATTERNS: &[&str] = &["Microsoft.YourPhone", "MicrosoftWindows.CrossDevice"];
 
 const ONEDRIVE_SETUP: &str = "OneDriveSetup.exe";
 
 // Seelen-UI replacement patterns -- removable when Seelen provides alternatives.
-const SEARCH_UI_PATTERNS: &[&str] = &[
-    "Microsoft.Windows.Search",
-    "Microsoft.Windows.SearchHost",
-];
+const SEARCH_UI_PATTERNS: &[&str] = &["Microsoft.Windows.Search", "Microsoft.Windows.SearchHost"];
 
 const START_EXPERIENCE_PATTERNS: &[&str] = &[
     "MicrosoftWindows.Client.CBS",
@@ -199,10 +193,7 @@ pub fn prune_appx_packages(mount_dir: &Path, config: &AppRemoval) -> Result<Prun
 
 /// Remove Windows components that Seelen-UI replaces (search UI, Start menu
 /// experience). Only called when Seelen-UI bundling is enabled.
-pub fn prune_seelen_replacements(
-    mount_dir: &Path,
-    config: &Seelen,
-) -> Result<PruneStats, Error> {
+pub fn prune_seelen_replacements(mount_dir: &Path, config: &Seelen) -> Result<PruneStats, Error> {
     let patterns = collect_patterns(&[
         (config.remove_windows_search_ui, SEARCH_UI_PATTERNS),
         (config.remove_start_experience, START_EXPERIENCE_PATTERNS),
@@ -269,7 +260,10 @@ pub fn remove_scheduled_tasks(
         // Customer Experience Improvement Program\Consolidator
         // Customer Experience Improvement Program\UsbCeip
         // Customer Experience Improvement Program\KernelCeipTask
-        remove_task_dir(&tasks_base.join("Customer Experience Improvement Program"), &mut stats)?;
+        remove_task_dir(
+            &tasks_base.join("Customer Experience Improvement Program"),
+            &mut stats,
+        )?;
     }
 
     if config.remove_disk_diagnostic_tasks {
@@ -463,11 +457,14 @@ mod tests {
     fn prune_removes_bloatware_dirs() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "BytedancePte.Ltd.TikTok_1.0",
-            "king.com.CandyCrushSodaSaga_2.0",
-            "Microsoft.VisualStudio_17.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "BytedancePte.Ltd.TikTok_1.0",
+                "king.com.CandyCrushSodaSaga_2.0",
+                "Microsoft.VisualStudio_17.0",
+            ],
+        );
 
         let config = AppRemoval {
             remove_bloatware: true,
@@ -482,18 +479,26 @@ mod tests {
             .filter_map(|e| e.ok())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert!(remaining[0].file_name().to_string_lossy().contains("VisualStudio"));
+        assert!(
+            remaining[0]
+                .file_name()
+                .to_string_lossy()
+                .contains("VisualStudio")
+        );
     }
 
     #[test]
     fn prune_removes_xbox_packages() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.XboxApp_1.0",
-            "Microsoft.XboxGameOverlay_1.0",
-            "Microsoft.VisualStudio_17.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.XboxApp_1.0",
+                "Microsoft.XboxGameOverlay_1.0",
+                "Microsoft.VisualStudio_17.0",
+            ],
+        );
 
         let config = AppRemoval {
             remove_xbox: true,
@@ -567,11 +572,14 @@ mod tests {
     fn prune_removes_store_when_requested() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.WindowsStore_1.0",
-            "Microsoft.StorePurchaseApp_1.0",
-            "Microsoft.Calculator_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.WindowsStore_1.0",
+                "Microsoft.StorePurchaseApp_1.0",
+                "Microsoft.Calculator_1.0",
+            ],
+        );
 
         // Need at least one pattern to avoid the early-return in prune_appx_packages.
         let config = AppRemoval {
@@ -604,10 +612,13 @@ mod tests {
     fn prune_pattern_is_substring_match() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "BytedancePte.Ltd.TikTok_1.2.3_x64__abcdef",
-            "SomethingElse_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "BytedancePte.Ltd.TikTok_1.2.3_x64__abcdef",
+                "SomethingElse_1.0",
+            ],
+        );
 
         let config = AppRemoval {
             remove_bloatware: true,
@@ -688,10 +699,13 @@ mod tests {
     fn prune_removes_phone_link() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.YourPhone_1.0",
-            "MicrosoftWindows.CrossDevice_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.YourPhone_1.0",
+                "MicrosoftWindows.CrossDevice_1.0",
+            ],
+        );
 
         let config = AppRemoval {
             remove_phone_link: true,
@@ -710,11 +724,14 @@ mod tests {
     fn prune_seelen_removes_search_and_start() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.Windows.Search_1.0",
-            "MicrosoftWindows.Client.CBS_1.0",
-            "Microsoft.Calculator_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.Windows.Search_1.0",
+                "MicrosoftWindows.Client.CBS_1.0",
+                "Microsoft.Calculator_1.0",
+            ],
+        );
 
         let config = Seelen {
             bundle: true,
@@ -877,17 +894,20 @@ mod tests {
     fn prune_with_all_categories_enabled() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "BytedancePte.Ltd.TikTok_1.0",
-            "Microsoft.XboxApp_1.0",
-            "MicrosoftTeams_1.0",
-            "Microsoft.549981C3F5F10_1.0",
-            "Microsoft.OutlookForWindows_1.0",
-            "microsoft.windowscommunicationsapps_1.0",
-            "Microsoft.Windows.DevHome_1.0",
-            "Microsoft.YourPhone_1.0",
-            "Microsoft.WindowsCalculator_1.0", // survivor
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "BytedancePte.Ltd.TikTok_1.0",
+                "Microsoft.XboxApp_1.0",
+                "MicrosoftTeams_1.0",
+                "Microsoft.549981C3F5F10_1.0",
+                "Microsoft.OutlookForWindows_1.0",
+                "microsoft.windowscommunicationsapps_1.0",
+                "Microsoft.Windows.DevHome_1.0",
+                "Microsoft.YourPhone_1.0",
+                "Microsoft.WindowsCalculator_1.0", // survivor
+            ],
+        );
 
         let config = AppRemoval {
             remove_bloatware: true,
@@ -911,18 +931,22 @@ mod tests {
             .filter_map(|e| e.ok())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert!(remaining[0].file_name().to_string_lossy().contains("Calculator"));
+        assert!(
+            remaining[0]
+                .file_name()
+                .to_string_lossy()
+                .contains("Calculator")
+        );
     }
 
     #[test]
     fn prune_with_multiple_extra_patterns() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "MyCustomApp_1.0",
-            "AnotherCustom_2.0",
-            "SafeApp_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &["MyCustomApp_1.0", "AnotherCustom_2.0", "SafeApp_1.0"],
+        );
 
         let config = AppRemoval {
             extra_patterns: vec!["MyCustomApp".into(), "AnotherCustom".into()],
@@ -981,7 +1005,10 @@ mod tests {
 
     #[test]
     fn prune_stats_debug_format() {
-        let stats = PruneStats { dirs_removed: 5, files_removed: 10 };
+        let stats = PruneStats {
+            dirs_removed: 5,
+            files_removed: 10,
+        };
         let debug = format!("{stats:?}");
         assert!(debug.contains("5"));
         assert!(debug.contains("10"));
@@ -1011,12 +1038,15 @@ mod tests {
     fn prune_seelen_only_search_ui() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.Windows.Search_1.0",
-            "Microsoft.Windows.SearchHost_1.0",
-            "MicrosoftWindows.Client.CBS_1.0",
-            "Microsoft.Windows.StartMenuExperienceHost_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.Windows.Search_1.0",
+                "Microsoft.Windows.SearchHost_1.0",
+                "MicrosoftWindows.Client.CBS_1.0",
+                "Microsoft.Windows.StartMenuExperienceHost_1.0",
+            ],
+        );
 
         let config = Seelen {
             bundle: true,
@@ -1033,11 +1063,14 @@ mod tests {
     fn prune_seelen_only_start_experience() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &[
-            "Microsoft.Windows.Search_1.0",
-            "MicrosoftWindows.Client.CBS_1.0",
-            "Microsoft.Windows.StartMenuExperienceHost_1.0",
-        ]);
+        create_fake_apps(
+            mount,
+            &[
+                "Microsoft.Windows.Search_1.0",
+                "MicrosoftWindows.Client.CBS_1.0",
+                "Microsoft.Windows.StartMenuExperienceHost_1.0",
+            ],
+        );
 
         let config = Seelen {
             bundle: true,
@@ -1123,7 +1156,10 @@ mod tests {
     fn prune_removes_mail() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path();
-        create_fake_apps(mount, &["microsoft.windowscommunicationsapps_1.0", "Notepad_1.0"]);
+        create_fake_apps(
+            mount,
+            &["microsoft.windowscommunicationsapps_1.0", "Notepad_1.0"],
+        );
 
         let config = AppRemoval {
             remove_mail: true,

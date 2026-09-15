@@ -3,7 +3,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{ensure_dir, run_cmd, Error};
+use crate::error::{Error, ensure_dir, run_cmd};
 
 /// Extract a Windows ISO to `staging_dir` using `7z`.
 ///
@@ -12,10 +12,7 @@ pub fn extract_iso(iso_path: &Path, staging_dir: &Path) -> Result<(), Error> {
     if !iso_path.exists() {
         return Err(Error::Io {
             context: format!("ISO not found: {}", iso_path.display()),
-            source: std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "source ISO does not exist",
-            ),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "source ISO does not exist"),
         });
     }
 

@@ -5,7 +5,7 @@ use std::process::Command;
 use tracing::{error, info, warn};
 
 use crate::config::WimIndex;
-use crate::error::{ensure_dir, run_cmd, Error};
+use crate::error::{Error, ensure_dir, run_cmd};
 
 /// RAII guard for a FUSE-mounted WIM image.
 ///
@@ -86,7 +86,6 @@ impl WimMount {
         info!("WIM unmounted and committed successfully");
         Ok(())
     }
-
 }
 
 /// Unmount-without-commit logic used by `Drop`.
@@ -96,11 +95,7 @@ fn unmount_no_commit(mount_dir: &Path) {
         "unmounting WIM WITHOUT commit (discarding changes)"
     );
 
-    let result = run_cmd(
-        Command::new("wimlib-imagex")
-            .arg("unmount")
-            .arg(mount_dir),
-    );
+    let result = run_cmd(Command::new("wimlib-imagex").arg("unmount").arg(mount_dir));
 
     if let Err(e) = result {
         error!(%e, "failed to unmount WIM during discard — mount may be stuck");

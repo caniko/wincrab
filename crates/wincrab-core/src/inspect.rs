@@ -3,7 +3,7 @@ use std::process::Command;
 
 use tracing::info;
 
-use crate::error::{run_cmd, Error};
+use crate::error::{Error, run_cmd};
 use crate::extract::{extract_iso, find_install_image};
 
 pub fn inspect_iso(iso_path: &Path, work_dir: &Path) -> Result<String, Error> {
@@ -17,11 +17,7 @@ pub fn inspect_iso(iso_path: &Path, work_dir: &Path) -> Result<String, Error> {
 
     info!(image = %image_path.display(), "querying image info");
 
-    let output = run_cmd(
-        Command::new("wimlib-imagex")
-            .arg("info")
-            .arg(&image_path),
-    )?;
+    let output = run_cmd(Command::new("wimlib-imagex").arg("info").arg(&image_path))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 
@@ -37,10 +33,7 @@ mod tests {
     #[test]
     fn inspect_nonexistent_iso_returns_error() {
         let dir = tempfile::tempdir().unwrap();
-        let result = inspect_iso(
-            Path::new("/nonexistent/windows.iso"),
-            dir.path(),
-        );
+        let result = inspect_iso(Path::new("/nonexistent/windows.iso"), dir.path());
         assert!(result.is_err());
     }
 

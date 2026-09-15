@@ -2,7 +2,7 @@
   description = "wincrab — debloated Windows 11 ISO builder for Linux";
 
   inputs = {
-    harbor-rs.url = "git+ssh://git@github.com/caniko/harbor-rs.git?ref=trunk&rev=fac8049316846e0ef1c1e6acd92aed7a337b333a";
+    harbor-rs.url = "git+https://github.com/caniko/harbor-rs.git?ref=trunk&rev=de6a15f5c102a63b14430fc09f73f9af02606ca6";
     rs-harbor.follows = "harbor-rs";
     nixpkgs.follows = "harbor-rs/nixpkgs";
     crane.follows = "harbor-rs/crane";
@@ -38,7 +38,11 @@
         mkWindowsVM = import ./lib/mkWindowsVM.nix { inherit pkgs; };
         mkDebloatedISO = import ./lib/mkDebloatedISO.nix { inherit pkgs wincrab; };
 
-        toolchain = harbor-rs.lib.mkToolchain { inherit pkgs; toolchainProfile = "nightly"; };
+        toolchain = harbor-rs.lib.mkToolchain {
+          inherit pkgs;
+          toolchainProfile = "nightly";
+          cache.cacheRoot = "/tmp/sccache";
+        };
         craneLib = toolchain.craneLib;
         src = craneLib.cleanCargoSource ./.;
 
@@ -58,7 +62,7 @@
           inherit pkgs;
           buildPackageSet = pkgs.buildPackages;
           sccachePackage = pkgs.buildPackages.sccache;
-          cacheRoot = null;
+          cacheRoot = "/tmp/sccache";
           namespaceScope = "canix-rust";
           namespaceGeneration = 5;
         };
@@ -755,6 +759,16 @@
           };
           test-e2e = flake-utils.lib.mkApp {
             drv = self.packages.${system}.test-e2e;
+          };
+            push-flake-inputs = harbor-rs.lib.mkAtticPush {
+              inherit pkgs;
+              adapter = harbor-rs.lib.mkAdapter {
+              attic = {
+                endpoint = "https://attic.candee.baby";
+                cache = "canix";
+              };
+            };
+            flake = ".";
           };
           default = self.apps.${system}.wincrab;
         };

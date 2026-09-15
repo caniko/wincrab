@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::io::Read;
 use tracing::info;
 
-use crate::error::{ensure_dir, write_file, Error};
+use crate::error::{Error, ensure_dir, write_file};
 
 /// Build output metadata written alongside the ISO.
 ///

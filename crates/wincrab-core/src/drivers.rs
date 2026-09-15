@@ -4,14 +4,13 @@ use smallvec::SmallVec;
 use tracing::info;
 
 use crate::config::Drivers;
-use crate::error::{copy_file, ensure_dir, write_file, Error};
+use crate::error::{Error, copy_file, ensure_dir, write_file};
 use crate::github::{self, SimpleAsset};
 
 const BTRFS_API: &str = "https://api.github.com/repos/maharmstone/btrfs/releases/latest";
 const EXT2FSD_API: &str = "https://api.github.com/repos/bobranten/Ext2Fsd/releases/latest";
 const WINFSP_API: &str = "https://api.github.com/repos/winfsp/winfsp/releases/latest";
-const MERGERFS_API: &str =
-    "https://api.github.com/repos/trapexit/mergerfs-windows/releases/latest";
+const MERGERFS_API: &str = "https://api.github.com/repos/trapexit/mergerfs-windows/releases/latest";
 
 /// Paths to downloaded driver packages, populated by [`download_drivers`].
 pub struct DriverPaths {

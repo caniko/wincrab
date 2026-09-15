@@ -4,7 +4,7 @@ use std::process::Command;
 use tracing::info;
 
 use crate::config::WimIndex;
-use crate::error::{remove_file, run_cmd, Error};
+use crate::error::{Error, remove_file, run_cmd};
 
 pub fn convert_esd_to_wim(esd_path: &Path, wim_index: WimIndex) -> Result<PathBuf, Error> {
     let output_wim = esd_path

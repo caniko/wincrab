@@ -596,13 +596,19 @@ pub fn load_profile(name: &str) -> Result<Config, Error> {
 
 /// Fixed-size array of all known profile names — avoids a heap allocation
 /// compared to returning `Vec`.
-pub const PROFILE_NAMES: [&str; 6] = ["minimal", "gaming", "privacy", "enterprise", "vm", "vm-seelen"];
+pub const PROFILE_NAMES: [&str; 6] = [
+    "minimal",
+    "gaming",
+    "privacy",
+    "enterprise",
+    "vm",
+    "vm-seelen",
+];
 
 pub fn merge_with_overrides(base: Config, overrides_toml: &str) -> Result<Config, Error> {
-    let base_value: toml::Value =
-        toml::Value::try_from(&base).map_err(|e| Error::Config {
-            message: format!("serializing base config: {e}"),
-        })?;
+    let base_value: toml::Value = toml::Value::try_from(&base).map_err(|e| Error::Config {
+        message: format!("serializing base config: {e}"),
+    })?;
 
     let override_value: toml::Value =
         toml::from_str(overrides_toml).map_err(|e| Error::Config {
@@ -727,11 +733,7 @@ mod tests {
     #[test]
     fn merge_overrides_nested() {
         let base = load_profile("minimal").unwrap();
-        let merged = merge_with_overrides(
-            base,
-            "[apps]\nremove_store = false\n",
-        )
-        .unwrap();
+        let merged = merge_with_overrides(base, "[apps]\nremove_store = false\n").unwrap();
         assert!(!merged.apps.remove_store);
         assert!(merged.apps.remove_bloatware);
     }
@@ -755,10 +757,8 @@ mod tests {
 
     #[test]
     fn deep_merge_nested_tables() {
-        let base: toml::Value =
-            toml::from_str("[t]\na = 1\nb = 2").unwrap();
-        let overlay: toml::Value =
-            toml::from_str("[t]\nb = 99").unwrap();
+        let base: toml::Value = toml::from_str("[t]\na = 1\nb = 2").unwrap();
+        let overlay: toml::Value = toml::from_str("[t]\nb = 99").unwrap();
         let merged = deep_merge(base, overlay);
         assert_eq!(merged["t"]["a"].as_integer(), Some(1));
         assert_eq!(merged["t"]["b"].as_integer(), Some(99));

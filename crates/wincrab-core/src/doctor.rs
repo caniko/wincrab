@@ -36,9 +36,7 @@ pub fn run_doctor() -> Result<(), Error> {
     info!("running wincrab doctor checks");
 
     for tool in TOOLS {
-        let result = Command::new(tool.name)
-            .args(tool.version_args)
-            .output();
+        let result = Command::new(tool.name).args(tool.version_args).output();
 
         match result {
             Ok(output) => {

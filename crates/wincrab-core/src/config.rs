@@ -148,10 +148,7 @@ impl Config {
         for entry in &self.inject.files {
             if !entry.src.exists() {
                 return Err(Error::Config {
-                    message: format!(
-                        "inject source path does not exist: {}",
-                        entry.src.display(),
-                    ),
+                    message: format!("inject source path does not exist: {}", entry.src.display(),),
                 });
             }
         }
@@ -645,11 +642,7 @@ pub struct Drivers {
 impl Drivers {
     /// Returns `true` if any driver is enabled.
     pub fn any_enabled(&self) -> bool {
-        self.btrfs
-            || self.ext4
-            || self.winfsp
-            || self.mergerfs
-            || self.virtio
+        self.btrfs || self.ext4 || self.winfsp || self.mergerfs || self.virtio
     }
 }
 
@@ -1060,13 +1053,19 @@ mod tests {
 
     #[test]
     fn drivers_any_enabled_btrfs() {
-        let d = Drivers { btrfs: true, ..Default::default() };
+        let d = Drivers {
+            btrfs: true,
+            ..Default::default()
+        };
         assert!(d.any_enabled());
     }
 
     #[test]
     fn drivers_any_enabled_virtio() {
-        let d = Drivers { virtio: true, ..Default::default() };
+        let d = Drivers {
+            virtio: true,
+            ..Default::default()
+        };
         assert!(d.any_enabled());
     }
 
@@ -1106,8 +1105,7 @@ mod tests {
 
     #[test]
     fn bool_field_with_int_errors() {
-        let result: Result<Config, _> =
-            toml::from_str("[telemetry]\ndisable = 42");
+        let result: Result<Config, _> = toml::from_str("[telemetry]\ndisable = 42");
         assert!(result.is_err());
     }
 

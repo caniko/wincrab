@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 use tracing::info;
 
 use crate::config::Oobe;
-use crate::error::{write_file, Error};
+use crate::error::{Error, write_file};
 
 /// Generate and write an `autounattend.xml` file into the ISO staging directory.
 ///
@@ -96,7 +96,8 @@ fn generate_autounattend(config: &Oobe) -> String {
         if !run_sync_cmds.is_empty() {
             xml.push_str("\n            <RunSynchronous>");
             for (i, cmd) in run_sync_cmds.iter().enumerate() {
-                let _ = write!(xml,
+                let _ = write!(
+                    xml,
                     r#"
                 <RunSynchronousCommand wcm:action="add">
                     <Order>{}</Order>
@@ -110,7 +111,8 @@ fn generate_autounattend(config: &Oobe) -> String {
 
         // -- Product key --
         if let Some(ref key) = config.product_key {
-            let _ = write!(xml,
+            let _ = write!(
+                xml,
                 r#"
             <UserData>
                 <ProductKey>
@@ -219,11 +221,9 @@ fn generate_autounattend(config: &Oobe) -> String {
 
     // -- Local account --
     if let Some(ref account_name) = config.local_account_name {
-        let password = config
-            .local_account_password
-            .as_deref()
-            .unwrap_or("");
-        let _ = write!(xml,
+        let password = config.local_account_password.as_deref().unwrap_or("");
+        let _ = write!(
+            xml,
             r#"
             <UserAccounts>
                 <LocalAccounts>
@@ -241,11 +241,9 @@ fn generate_autounattend(config: &Oobe) -> String {
     if config.auto_logon
         && let Some(ref account_name) = config.local_account_name
     {
-        let password = config
-            .local_account_password
-            .as_deref()
-            .unwrap_or("");
-        let _ = write!(xml,
+        let password = config.local_account_password.as_deref().unwrap_or("");
+        let _ = write!(
+            xml,
             r#"
             <AutoLogon>
                 <Enabled>true</Enabled>
@@ -277,7 +275,8 @@ fn generate_autounattend(config: &Oobe) -> String {
     if !first_logon_cmds.is_empty() {
         xml.push_str("\n            <FirstLogonCommands>");
         for (i, cmd) in first_logon_cmds.iter().enumerate() {
-            let _ = write!(xml,
+            let _ = write!(
+                xml,
                 r#"
                 <SynchronousCommand wcm:action="add">
                     <Order>{}</Order>
@@ -511,10 +510,8 @@ mod tests {
     #[test]
     fn inject_to_nonexistent_dir_returns_error() {
         let config = Oobe::default();
-        let result = inject_autounattend(
-            std::path::Path::new("/nonexistent/dir/for/test"),
-            &config,
-        );
+        let result =
+            inject_autounattend(std::path::Path::new("/nonexistent/dir/for/test"), &config);
         assert!(result.is_err());
     }
 
@@ -940,6 +937,9 @@ mod tests {
         let xml = generate_autounattend(&config);
         let open_count = xml.matches('<').count();
         let close_count = xml.matches('>').count();
-        assert_eq!(open_count, close_count, "mismatched angle brackets in full config XML");
+        assert_eq!(
+            open_count, close_count,
+            "mismatched angle brackets in full config XML"
+        );
     }
 }

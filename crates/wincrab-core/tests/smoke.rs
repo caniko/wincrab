@@ -31,20 +31,26 @@ fn config_is_clone() {
 
 #[test]
 fn error_is_debug() {
-    let err = Error::Config { message: "test".into() };
+    let err = Error::Config {
+        message: "test".into(),
+    };
     let _ = format!("{err:?}");
 }
 
 #[test]
 fn error_implements_display() {
-    let err = Error::Config { message: "smoke test".into() };
+    let err = Error::Config {
+        message: "smoke test".into(),
+    };
     let msg = format!("{err}");
     assert!(msg.contains("smoke test"));
 }
 
 #[test]
 fn error_implements_std_error() {
-    let err = Error::Config { message: "test".into() };
+    let err = Error::Config {
+        message: "test".into(),
+    };
     let _: &dyn std::error::Error = &err;
 }
 
@@ -65,7 +71,10 @@ fn default_config_roundtrips() {
     let serialized = toml::to_string_pretty(&original).unwrap();
     let deserialized: Config = toml::from_str(&serialized).unwrap();
     assert_eq!(original.wim_index, deserialized.wim_index);
-    assert_eq!(original.apps.remove_bloatware, deserialized.apps.remove_bloatware);
+    assert_eq!(
+        original.apps.remove_bloatware,
+        deserialized.apps.remove_bloatware
+    );
     assert_eq!(original.apps.remove_store, deserialized.apps.remove_store);
     assert_eq!(original.telemetry.disable, deserialized.telemetry.disable);
     assert_eq!(original.copilot.disable, deserialized.copilot.disable);
@@ -102,16 +111,26 @@ fn all_error_variants_constructible() {
             context: "test".into(),
             source: std::io::Error::other("e"),
         },
-        Error::Config { message: "bad".into() },
+        Error::Config {
+            message: "bad".into(),
+        },
         Error::Command {
             command: "cmd".into(),
             code: 1,
             stderr: "err".into(),
         },
-        Error::CommandSignaled { command: "cmd".into() },
-        Error::ToolNotFound { tool: "tool".into() },
-        Error::WimNotFound { path: "/wim".into() },
-        Error::HiveNotFound { path: "/hive".into() },
+        Error::CommandSignaled {
+            command: "cmd".into(),
+        },
+        Error::ToolNotFound {
+            tool: "tool".into(),
+        },
+        Error::WimNotFound {
+            path: "/wim".into(),
+        },
+        Error::HiveNotFound {
+            path: "/hive".into(),
+        },
     ];
 
     for err in &errors {
@@ -344,7 +363,10 @@ fn drivers_defaults() {
 
 #[test]
 fn config_preserves_all_fields_through_roundtrip() {
-    let mut config = Config { wim_index: wincrab_core::WimIndex(3), ..Config::default() };
+    let mut config = Config {
+        wim_index: wincrab_core::WimIndex(3),
+        ..Config::default()
+    };
     config.apps.remove_store = true;
     config.apps.remove_bloatware = false;
     config.telemetry.disable = false;
@@ -416,10 +438,7 @@ fn github_simple_asset_accessible() {
         label: "test",
         predicate: |_| true,
     };
-    assert_eq!(
-        wincrab_core::github::GitHubAsset::label(&asset),
-        "test"
-    );
+    assert_eq!(wincrab_core::github::GitHubAsset::label(&asset), "test");
 }
 
 #[test]

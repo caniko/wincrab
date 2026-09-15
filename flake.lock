@@ -3,11 +3,11 @@
     "advisory-db": {
       "flake": false,
       "locked": {
-        "lastModified": 1772565019,
-        "narHash": "sha256-qPOgY5Jyb40ZeFdz+QbhO/9iAXLO+3tCHtgzWcqyr5M=",
+        "lastModified": 1787583268,
+        "narHash": "sha256-dC1CUzmdMDuwnKJrCt11bcKPB80CiWrD9O4j4kc1oh8=",
         "owner": "rustsec",
         "repo": "advisory-db",
-        "rev": "d23a70546b5ecbfda7508530088b22ea57acde70",
+        "rev": "cebc72be9ffc5707a5b0c70fc662198a1eb231a4",
         "type": "github"
       },
       "original": {
@@ -251,14 +251,15 @@
         "nixpkgs": [
           "harbor-rs",
           "nixpkgs"
-        ]
+        ],
+        "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1787576641,
-        "narHash": "sha256-LD/NY+EGxp80zrCV6Q88AFLlVEflW5OwG4Cc3p/iksY=",
+        "lastModified": 1788983123,
+        "narHash": "sha256-57p1gvtRrl465F39yzkZNnY37kroS4yfn05B1OZBXNc=",
         "ref": "trunk",
-        "rev": "61182b8380ff990058fdccb1bbb7a3e7d9575256",
-        "revCount": 10,
+        "rev": "9e4e085ae399e7b39482a5b8e11df78a9ebd4e59",
+        "revCount": 15,
         "type": "git",
         "url": "https://github.com/caniko/harbor-meta.git"
       },
@@ -284,22 +285,22 @@
         "nixpkgs": "nixpkgs",
         "osxcross": "osxcross",
         "rust-overlay": "rust-overlay",
-        "treefmt-nix": "treefmt-nix_2"
+        "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1788977721,
-        "narHash": "sha256-+othZSrB8LLSeeQWiajnbVuVQbAGPtQ3+ZfJYdHu2b0=",
+        "lastModified": 1789462730,
+        "narHash": "sha256-6P1xy+rld/pqZ7oe03cfeLAaDgzf+phbExX7+k+EhWE=",
         "ref": "trunk",
-        "rev": "fac8049316846e0ef1c1e6acd92aed7a337b333a",
-        "revCount": 217,
+        "rev": "de6a15f5c102a63b14430fc09f73f9af02606ca6",
+        "revCount": 222,
         "type": "git",
-        "url": "ssh://git@github.com/caniko/harbor-rs.git"
+        "url": "https://github.com/caniko/harbor-rs.git"
       },
       "original": {
         "ref": "trunk",
-        "rev": "fac8049316846e0ef1c1e6acd92aed7a337b333a",
+        "rev": "de6a15f5c102a63b14430fc09f73f9af02606ca6",
         "type": "git",
-        "url": "ssh://git@github.com/caniko/harbor-rs.git"
+        "url": "https://github.com/caniko/harbor-rs.git"
       }
     },
     "nix-bundle": {
@@ -553,6 +554,28 @@
       }
     },
     "treefmt-nix_2": {
+      "inputs": {
+        "nixpkgs": [
+          "harbor-rs",
+          "harbor-meta",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786901030,
+        "narHash": "sha256-WSFCsDSE5ffgD2MqzkM2CYjeFiKhRF/dJUN8uedb6YE=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "treefmt-nix_3": {
       "inputs": {
         "nixpkgs": [
           "harbor-rs",

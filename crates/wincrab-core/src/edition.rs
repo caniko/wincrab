@@ -4,7 +4,7 @@ use std::process::Command;
 use tracing::info;
 
 use crate::config::WimIndex;
-use crate::error::{ensure_dir, run_cmd, write_file, Error};
+use crate::error::{Error, ensure_dir, run_cmd, write_file};
 
 pub fn convert_edition(
     staging_dir: &Path,

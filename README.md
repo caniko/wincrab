@@ -2,7 +2,7 @@
 
 <!-- simit:badges:start -->
 
-![CI](https://img.shields.io/badge/CI-managed-2088ff)
+[![CI](https://img.shields.io/badge/CI-managed-2088ff)](.github/workflows/ci.yaml) ![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)
 
 <!-- simit:badges:end -->
 
