@@ -3,11 +3,11 @@
     "advisory-db": {
       "flake": false,
       "locked": {
-        "lastModified": 1787583268,
-        "narHash": "sha256-dC1CUzmdMDuwnKJrCt11bcKPB80CiWrD9O4j4kc1oh8=",
+        "lastModified": 1789401966,
+        "narHash": "sha256-9yjzblgyWNo0O1uhNlK6vGf2UNlloxAHtg0PL1AfEHo=",
         "owner": "rustsec",
         "repo": "advisory-db",
-        "rev": "cebc72be9ffc5707a5b0c70fc662198a1eb231a4",
+        "rev": "e2e640471715167f73e22eaf761f2e547adafeec",
         "type": "github"
       },
       "original": {
@@ -444,9 +444,6 @@
         "nixpkgs": [
           "harbor-rs",
           "nixpkgs"
-        ],
-        "rs-harbor": [
-          "harbor-rs"
         ]
       }
     },
