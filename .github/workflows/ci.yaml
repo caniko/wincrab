@@ -7,8 +7,11 @@ on:
     tags-ignore: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow_ref }}-${{ github.ref }}
+  group: ${{ github.workflow_ref }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -29,13 +32,13 @@ jobs:
         run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       - name: Format check
-        run: nix develop -c cargo fmt --all -- --check
+        run: nix develop -c treefmt --ci
 
       - name: Check flake
         run: nix flake check
 
-      - name: Test
+      - name: Test all features
         run: nix develop -c cargo test --workspace --all-features
 
-      - name: Clippy
+      - name: Clippy all features
         run: nix develop -c cargo clippy --workspace --all-targets --all-features -- --deny warnings
