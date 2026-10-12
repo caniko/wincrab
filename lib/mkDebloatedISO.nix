@@ -7,25 +7,21 @@
 #   }
 #
 # Returns: a derivation whose output is the debloated ISO at $out/windows.iso
-
-{ pkgs, wincrab }:
-
 {
+  pkgs,
+  wincrab,
+}: {
   sourceIso,
   config ? null,
   # WIM image index (default: 6 = Pro). Override to target a different edition.
   wimIndex ? null,
-}:
-
-let
+}: let
   configArg =
-    if config != null then
-      "--config ${config}"
-    else
-      "";
+    if config != null
+    then "--config ${config}"
+    else "";
 in
-
-pkgs.runCommand "debloated-windows-iso"
+  pkgs.runCommand "debloated-windows-iso"
   {
     nativeBuildInputs = [
       wincrab

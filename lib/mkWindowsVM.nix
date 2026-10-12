@@ -10,10 +10,7 @@
 #       pciPassthrough = [{ address = "01:00.0"; }];
 #     };
 #   in { packages.x86_64-linux = { inherit (vm) create install boot; }; }
-
-{ pkgs }:
-
-{
+{pkgs}: {
   name,
   iso ? null,
   ram ? "8G",
@@ -24,21 +21,18 @@
   # USB passthrough: list of { vendorId, productId } attrsets.
   # Find IDs with `lsusb`.
   # Requires host udev rules or appropriate permissions.
-  usbPassthrough ? [ ],
+  usbPassthrough ? [],
   # PCI passthrough (VFIO): list of { address } attrsets.
   # address is the BDF notation, e.g. "01:00.0".
   # Requires IOMMU enabled, vfio-pci driver bound to the device.
-  pciPassthrough ? [ ],
-}:
-
-let
+  pciPassthrough ? [],
+}: let
   inherit (pkgs) lib;
 
   stateDir' =
-    if stateDir != null then
-      "\"${stateDir}\""
-    else
-      "\"$HOME/.local/share/wincrab-vms/${name}\"";
+    if stateDir != null
+    then "\"${stateDir}\""
+    else "\"$HOME/.local/share/wincrab-vms/${name}\"";
 
   ovmfCode = "${pkgs.OVMFFull.fd}/FV/OVMF_CODE.fd";
   ovmfVarsTemplate = "${pkgs.OVMFFull.fd}/FV/OVMF_VARS.fd";
@@ -62,14 +56,17 @@ let
 
   # Resolve ISO: derivation path, baked-in string, or $1
   resolveIso =
-    if iso != null then
-      if builtins.isPath iso || lib.isDerivation iso then
+    if iso != null
+    then
+      if builtins.isPath iso || lib.isDerivation iso
+      then
         # Derivation or Nix path — resolve to store path at build time
         let
           isoPath =
-            if lib.isDerivation iso then "${iso}/windows.iso" else "${iso}";
-        in
-        ''ISO="${isoPath}"''
+            if lib.isDerivation iso
+            then "${iso}/windows.iso"
+            else "${iso}";
+        in ''ISO="${isoPath}"''
       else
         # Plain string path — bake it in
         ''ISO="${iso}"''
@@ -101,25 +98,25 @@ let
 
   # USB passthrough args: xHCI controller + one usb-host per device
   usbArgs =
-    if usbPassthrough != [ ] then
+    if usbPassthrough != []
+    then
       lib.concatStringsSep " \\\n    " (
-        [ "-device qemu-xhci,id=xhci" ]
+        ["-device qemu-xhci,id=xhci"]
         ++ lib.imap0 (
-          i: dev:
-          "-device usb-host,bus=xhci.0,vendorid=0x${dev.vendorId},productid=0x${dev.productId}"
-        ) usbPassthrough
+          i: dev: "-device usb-host,bus=xhci.0,vendorid=0x${dev.vendorId},productid=0x${dev.productId}"
+        )
+        usbPassthrough
       )
-    else
-      "";
+    else "";
 
   # PCI/VFIO passthrough args
   pciArgs =
-    if pciPassthrough != [ ] then
+    if pciPassthrough != []
+    then
       lib.concatStringsSep " \\\n    " (
         lib.map (dev: "-device vfio-pci,host=${dev.address}") pciPassthrough
       )
-    else
-      "";
+    else "";
 
   # Extra device args (USB + PCI combined)
   extraDeviceArgs = lib.concatStringsSep " \\\n    " (
@@ -147,18 +144,15 @@ let
     -device usb-tablet \
     -global isa-debugcon.iobase=0x402 \
     -debugcon "file:$STATE_DIR/ovmf-debug.log"${
-      if extraDeviceArgs != "" then
-        " \\\n    ${extraDeviceArgs}"
-      else
-        ""
+      if extraDeviceArgs != ""
+      then " \\\n    ${extraDeviceArgs}"
+      else ""
     }
   '';
-
-in
-{
+in {
   create = pkgs.writeShellApplication {
     name = "${name}-create";
-    runtimeInputs = [ pkgs.qemu ];
+    runtimeInputs = [pkgs.qemu];
     text = ''
       set -euo pipefail
       ${setStateDir}
@@ -202,8 +196,8 @@ in
       echo "  ISO:  $ISO"
       echo "  Disk: $STATE_DIR/disk.qcow2"
       echo "  RAM:  ${ram}  CPUs: ${toString cpus}"
-      ${lib.optionalString (usbPassthrough != [ ]) ''echo "  USB:  ${toString (builtins.length usbPassthrough)} device(s) passed through"''}
-      ${lib.optionalString (pciPassthrough != [ ]) ''echo "  PCI:  ${toString (builtins.length pciPassthrough)} device(s) passed through"''}
+      ${lib.optionalString (usbPassthrough != []) ''echo "  USB:  ${toString (builtins.length usbPassthrough)} device(s) passed through"''}
+      ${lib.optionalString (pciPassthrough != []) ''echo "  PCI:  ${toString (builtins.length pciPassthrough)} device(s) passed through"''}
       echo ""
       echo "Tip: Press Ctrl+Alt+G to release mouse grab"
 
@@ -231,8 +225,8 @@ in
       echo "Booting VM '${name}'"
       echo "  Disk: $STATE_DIR/disk.qcow2"
       echo "  RAM:  ${ram}  CPUs: ${toString cpus}"
-      ${lib.optionalString (usbPassthrough != [ ]) ''echo "  USB:  ${toString (builtins.length usbPassthrough)} device(s) passed through"''}
-      ${lib.optionalString (pciPassthrough != [ ]) ''echo "  PCI:  ${toString (builtins.length pciPassthrough)} device(s) passed through"''}
+      ${lib.optionalString (usbPassthrough != []) ''echo "  USB:  ${toString (builtins.length usbPassthrough)} device(s) passed through"''}
+      ${lib.optionalString (pciPassthrough != []) ''echo "  PCI:  ${toString (builtins.length pciPassthrough)} device(s) passed through"''}
       echo ""
       echo "Tip: Press Ctrl+Alt+G to release mouse grab"
 
@@ -274,7 +268,7 @@ in
 
   snapshot-save = pkgs.writeShellApplication {
     name = "${name}-snapshot-save";
-    runtimeInputs = [ pkgs.qemu ];
+    runtimeInputs = [pkgs.qemu];
     text = ''
       set -euo pipefail
       ${setStateDir}
@@ -289,7 +283,7 @@ in
 
   snapshot-restore = pkgs.writeShellApplication {
     name = "${name}-snapshot-restore";
-    runtimeInputs = [ pkgs.qemu ];
+    runtimeInputs = [pkgs.qemu];
     text = ''
       set -euo pipefail
       ${setStateDir}
@@ -304,7 +298,7 @@ in
 
   snapshot-list = pkgs.writeShellApplication {
     name = "${name}-snapshot-list";
-    runtimeInputs = [ pkgs.qemu ];
+    runtimeInputs = [pkgs.qemu];
     text = ''
       set -euo pipefail
       ${setStateDir}
