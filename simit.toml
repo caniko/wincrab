@@ -9,6 +9,7 @@ attic_app = ".#push-flake-inputs"
 runner = "ubuntu-24.04"
 workspace = true
 workspace_strategy = "aggregate"
+push_branches = ["trunk"]
 runtime = "nix"
 provider = "actions"
 platform = "github"
