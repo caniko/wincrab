@@ -1,4 +1,5 @@
 [prebuild]
+push_branches = ["trunk", "simit/update/**"]
 publish_attic = true
 attic_app = ".#push-flake-inputs"
 
@@ -9,7 +10,7 @@ attic_app = ".#push-flake-inputs"
 runner = "ubuntu-24.04"
 workspace = true
 workspace_strategy = "aggregate"
-push_branches = ["trunk"]
+push_branches = ["trunk", "simit/update/**"]
 runtime = "nix"
 provider = "actions"
 platform = "github"
