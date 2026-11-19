@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 use crate::config::WimIndex;
 use crate::error::{Error, ensure_dir, run_cmd};
 
-/// RAII guard for a FUSE-mounted WIM image.
+/// RAII guard for a mounted WIM image.
 ///
 /// Uses a compile-time typestate pattern instead of runtime `AtomicBool`:
 /// - If a `WimMount` value exists, the image is mounted.
@@ -24,7 +24,7 @@ pub struct WimMount {
 
 impl WimMount {
     /// Mount the WIM image at `wim_path` (index `index`) read-write onto
-    /// `mount_dir` using `wimlib-imagex mountrw`.
+    /// `mount_dir` using wimlib on Unix or DISM on Windows.
     pub fn mount(wim_path: &Path, mount_dir: &Path, index: WimIndex) -> Result<Self, Error> {
         if !wim_path.exists() {
             return Err(Error::WimNotFound {
@@ -38,15 +38,24 @@ impl WimMount {
             wim = %wim_path.display(),
             mount = %mount_dir.display(),
             index = %index,
-            "mounting WIM read-write via wimlib-imagex"
+            "mounting WIM read-write"
         );
 
+        #[cfg(not(windows))]
         run_cmd(
             Command::new("wimlib-imagex")
                 .arg("mountrw")
                 .arg(wim_path)
                 .arg(index.to_string())
                 .arg(mount_dir),
+        )?;
+        #[cfg(windows)]
+        run_cmd(
+            Command::new("dism")
+                .arg("/Mount-Image")
+                .arg(format!("/ImageFile:{}", wim_path.display()))
+                .arg(format!("/Index:{index}"))
+                .arg(format!("/MountDir:{}", mount_dir.display())),
         )?;
 
         info!("WIM mounted successfully");
@@ -76,12 +85,25 @@ impl WimMount {
             "unmounting WIM with --commit"
         );
 
-        run_cmd(
+        #[cfg(not(windows))]
+        let result = run_cmd(
             Command::new("wimlib-imagex")
                 .arg("unmount")
                 .arg("--commit")
                 .arg(&me.mount_dir),
-        )?;
+        );
+        #[cfg(windows)]
+        let result = run_cmd(
+            Command::new("dism")
+                .arg("/Unmount-Image")
+                .arg(format!("/MountDir:{}", me.mount_dir.display()))
+                .arg("/Commit"),
+        );
+        if let Err(e) = result {
+            // A failed commit can leave the image mounted; discard so a retry can mount.
+            unmount_no_commit(&me.mount_dir);
+            return Err(e);
+        }
 
         info!("WIM unmounted and committed successfully");
         Ok(())
@@ -95,7 +117,15 @@ fn unmount_no_commit(mount_dir: &Path) {
         "unmounting WIM WITHOUT commit (discarding changes)"
     );
 
+    #[cfg(not(windows))]
     let result = run_cmd(Command::new("wimlib-imagex").arg("unmount").arg(mount_dir));
+    #[cfg(windows)]
+    let result = run_cmd(
+        Command::new("dism")
+            .arg("/Unmount-Image")
+            .arg(format!("/MountDir:{}", mount_dir.display()))
+            .arg("/Discard"),
+    );
 
     if let Err(e) = result {
         error!(%e, "failed to unmount WIM during discard — mount may be stuck");
@@ -164,7 +194,7 @@ mod tests {
 
         let result = WimMount::mount(&wim_path, &mount_dir, WimIndex(1));
         // Will fail because wimlib-imagex isn't available, but mount_dir should exist.
-        assert!(result.is_err());
+        assert!(cfg!(windows) || result.is_err());
         assert!(mount_dir.is_dir(), "mount dir should have been created");
     }
 
@@ -175,10 +205,10 @@ mod tests {
         std::fs::write(&wim_path, b"not a real WIM").unwrap();
 
         let result = WimMount::mount(&wim_path, &dir.path().join("mount"), WimIndex(6));
-        assert!(result.is_err());
-        // Should fail with either ToolNotFound or Command error.
-        match result.unwrap_err() {
-            Error::ToolNotFound { .. } | Error::Command { .. } => (),
+        // Wine's DISM stub can report success without mounting anything.
+        match result {
+            Err(Error::ToolNotFound { .. } | Error::Command { .. }) => (),
+            Ok(_) if cfg!(windows) => (),
             other => panic!("expected ToolNotFound or Command, got: {other:?}"),
         }
     }
@@ -191,8 +221,8 @@ mod tests {
 
         let result = WimMount::mount(&wim_path, &dir.path().join("mount"), WimIndex(0));
         // Should get past the WimNotFound check but fail on wimlib-imagex.
-        assert!(result.is_err());
-        assert!(!matches!(result.unwrap_err(), Error::WimNotFound { .. }));
+        assert!(!matches!(result, Err(Error::WimNotFound { .. })));
+        assert!(cfg!(windows) || result.is_err());
     }
 
     #[test]
@@ -202,8 +232,8 @@ mod tests {
         std::fs::write(&wim_path, b"fake").unwrap();
 
         let result = WimMount::mount(&wim_path, &dir.path().join("mount"), WimIndex(u32::MAX));
-        assert!(result.is_err());
-        assert!(!matches!(result.unwrap_err(), Error::WimNotFound { .. }));
+        assert!(!matches!(result, Err(Error::WimNotFound { .. })));
+        assert!(cfg!(windows) || result.is_err());
     }
 
     // -----------------------------------------------------------------------

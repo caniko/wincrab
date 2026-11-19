@@ -62,7 +62,7 @@ fn count_phases(config: &Config) -> usize {
     if config.telemetry.block_telemetry_hosts || !config.telemetry.extra_blocked_hosts.is_empty() {
         n += 1; // hosts file
     }
-    if config.performance.high_perf_power_plan {
+    if config.performance.high_perf_power_plan || config.performance.ntfs_disable_last_access {
         n += 1; // performance script
     }
     if config.oobe.convert_edition.is_some() {
@@ -191,16 +191,16 @@ pub fn run(
         inject_telemetry_hosts(wim.mount_dir(), &config.telemetry)?;
     }
 
-    // --- Performance script ---
-    if config.performance.high_perf_power_plan {
-        next_phase("Injecting performance script");
-        inject_performance_script(wim.mount_dir(), &config.performance)?;
-    }
-
     // --- Custom file injection ---
     if !config.inject.files.is_empty() {
         next_phase("Injecting custom files");
         inject_custom_files(wim.mount_dir(), config)?;
+    }
+
+    // --- Performance script (after custom files, which may ship SetupComplete.cmd) ---
+    if config.performance.high_perf_power_plan || config.performance.ntfs_disable_last_access {
+        next_phase("Injecting performance script");
+        inject_performance_script(wim.mount_dir(), &config.performance)?;
     }
 
     // --- Registry edits ---
@@ -284,14 +284,15 @@ fn inject_custom_files(mount_dir: &Path, config: &Config) -> Result<(), Error> {
     for entry in &config.inject.files {
         let dest = mount_dir.join(&entry.dest);
 
-        // Prevent path traversal — reject dest paths containing ".." components
-        // which could escape the mount point (e.g. "../../etc/passwd").
+        // Prevent path traversal: only plain relative components may stay inside
+        // the mount ("..", "/x", "\\x" and "C:x" would escape it on some host OS).
         let dest_path = Path::new(&entry.dest);
-        if dest_path.is_absolute()
-            || dest_path
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
+        if dest_path.components().any(|c| {
+            !matches!(
+                c,
+                std::path::Component::Normal(_) | std::path::Component::CurDir
+            )
+        }) {
             return Err(Error::Config {
                 message: format!(
                     "inject dest '{}' must be a relative path without '..' components",
@@ -407,12 +408,16 @@ mod tests {
             },
             performance: crate::config::Performance {
                 high_perf_power_plan: false,
+                ntfs_disable_last_access: false,
                 ..Default::default()
             },
             drivers: crate::config::Drivers::default(),
             ..Config::default()
         };
         assert_eq!(count_phases(&config), 9);
+        let mut ntfs_only = config;
+        ntfs_only.performance.ntfs_disable_last_access = true;
+        assert_eq!(count_phases(&ntfs_only), 10);
     }
 
     #[test]
@@ -424,6 +429,7 @@ mod tests {
             },
             performance: crate::config::Performance {
                 high_perf_power_plan: false,
+                ntfs_disable_last_access: false,
                 ..Default::default()
             },
             ..Config::default()
@@ -444,6 +450,7 @@ mod tests {
             },
             performance: crate::config::Performance {
                 high_perf_power_plan: false,
+                ntfs_disable_last_access: false,
                 ..Default::default()
             },
             drivers: crate::config::Drivers {
@@ -511,21 +518,27 @@ mod tests {
         let src = dir.path().join("evil.txt");
         std::fs::write(&src, "pwned").unwrap();
 
-        let config = Config {
-            inject: crate::config::Inject {
-                files: vec![crate::config::InjectEntry {
-                    src,
-                    dest: "../../etc/passwd".into(),
-                }],
-            },
-            ..Config::default()
-        };
+        let mut escaping = vec!["../../etc/passwd", "/etc/passwd"];
+        if cfg!(windows) {
+            escaping.extend(["\\Windows\\evil.txt", "C:evil.txt"]);
+        }
+        for dest in escaping {
+            let config = Config {
+                inject: crate::config::Inject {
+                    files: vec![crate::config::InjectEntry {
+                        src: src.clone(),
+                        dest: dest.into(),
+                    }],
+                },
+                ..Config::default()
+            };
 
-        let result = inject_custom_files(&mount, &config);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Config { message } => assert!(message.contains("without '..' components")),
-            other => panic!("expected Config error, got: {other:?}"),
+            match inject_custom_files(&mount, &config) {
+                Err(Error::Config { message }) => {
+                    assert!(message.contains("without '..' components"), "{dest}")
+                }
+                other => panic!("expected Config error for {dest}, got: {other:?}"),
+            }
         }
     }
 

@@ -50,7 +50,7 @@ pub fn repack_iso(staging_dir: &Path, output_iso: &Path) -> Result<(), Error> {
     info!(
         staging = %staging_dir.display(),
         output = %output_iso.display(),
-        "repacking ISO with genisoimage (UDF + El Torito dual boot)"
+        "repacking ISO (UDF + El Torito dual boot)"
     );
 
     // genisoimage command matching the production-proven dockur/windows approach.
@@ -63,6 +63,7 @@ pub fn repack_iso(staging_dir: &Path, output_iso: &Path) -> Result<(), Error> {
     //   - UDF is required because the Windows Boot Manager reads BCD via UDF
     //   - ISO9660 level 4 allows long filenames and large files
     //   - -allow-limited-size handles install.wim > 4GB
+    #[cfg(not(windows))]
     run_cmd(
         Command::new("genisoimage")
             .arg("-o")
@@ -90,6 +91,14 @@ pub fn repack_iso(staging_dir: &Path, output_iso: &Path) -> Result<(), Error> {
             .arg("-quiet")
             .arg(staging_dir),
     )?;
+    #[cfg(windows)]
+    run_cmd(
+        Command::new("oscdimg")
+            .args(["-m", "-o", "-u2", "-udfver102"])
+            .arg(bootdata(staging_dir, efi_boot_path))
+            .arg(staging_dir)
+            .arg(output_iso),
+    )?;
 
     let metadata = std::fs::metadata(output_iso).map_err(|e| Error::Io {
         context: "reading output ISO metadata".into(),
@@ -100,4 +109,30 @@ pub fn repack_iso(staging_dir: &Path, output_iso: &Path) -> Result<(), Error> {
     info!(size_mb, path = %output_iso.display(), "ISO repacked successfully");
 
     Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn bootdata(staging: &Path, efi: &str) -> String {
+    let staging = staging.display().to_string().replace('/', "\\");
+    let staging = staging.trim_end_matches('\\');
+    format!(
+        "-bootdata:2#p0,e,b{staging}\\boot\\etfsboot.com#pEF,e,b{staging}\\{}",
+        efi.replace('/', "\\")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bootdata_contains_both_boot_images() {
+        assert_eq!(
+            bootdata(
+                Path::new("C:/staging folder/"),
+                "efi/microsoft/boot/efisys.bin"
+            ),
+            "-bootdata:2#p0,e,bC:\\staging folder\\boot\\etfsboot.com#pEF,e,bC:\\staging folder\\efi\\microsoft\\boot\\efisys.bin"
+        );
+    }
 }

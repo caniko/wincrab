@@ -16,8 +16,21 @@ pub fn run_hook(
 
     info!(hook = hook_name, script = script, "running hook");
 
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c").arg(script);
+    #[cfg(windows)]
+    let mut cmd = {
+        // cmd.exe does not use the MSVC argv quoting that `arg` applies;
+        // `/S` strips exactly one outer quote pair around the raw command.
+        use std::os::windows::process::CommandExt as _;
+        let mut cmd = Command::new("cmd");
+        cmd.raw_arg("/D /S /C").raw_arg(format!("\"{script}\""));
+        cmd
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(script);
+        cmd
+    };
 
     for (key, value) in env_vars {
         cmd.env(key, value);
@@ -41,9 +54,23 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn successful_script_returns_ok() {
         let result = run_hook("test", &Some("true".into()), &[]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn quoted_path_with_spaces_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("with space");
+        std::fs::create_dir_all(&sub).unwrap();
+        let script = sub.join("hook.cmd");
+        let marker = sub.join("ran.txt");
+        std::fs::write(&script, format!("@echo ok> \"{}\"\r\n", marker.display())).unwrap();
+        run_hook("test", &Some(format!("\"{}\"", script.display())), &[]).unwrap();
+        assert!(marker.exists());
     }
 
     #[test]
@@ -53,6 +80,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn env_vars_are_passed() {
         let result = run_hook(
             "test",
@@ -73,6 +101,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn script_with_output() {
         let result = run_hook("test", &Some("echo hello >/dev/null".into()), &[]);
         assert!(result.is_ok());
