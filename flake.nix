@@ -2,11 +2,16 @@
   description = "wincrab — debloated Windows 11 ISO builder for Linux";
 
   inputs = {
-    harbor-rs.url = "git+https://github.com/caniko/harbor-rs.git?ref=trunk&rev=ed89d0b13fc61dd1b2217bf4bba97f32cec27ba7";
+    harbor-rs.url = "git+https://github.com/caniko/harbor-rs.git?ref=trunk&rev=3017b628b3a0603c2ebf7347a46951e8457ad414";
     nixpkgs.follows = "harbor-rs/nixpkgs";
     crane.follows = "harbor-rs/crane";
 
     flake-utils.url = "github:numtide/flake-utils";
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     advisory-db = {
       url = "github:rustsec/advisory-db";
@@ -21,6 +26,7 @@
       nixpkgs,
       crane,
       flake-utils,
+      treefmt-nix,
       advisory-db,
       ...
     }:
@@ -43,6 +49,7 @@
           cache.cacheRoot = "/tmp/sccache";
         };
         craneLib = toolchain.craneLib;
+        cross = harbor-rs.lib.mkCross { inherit pkgs system; };
         src = craneLib.cleanCargoSource ./.;
 
         commonArgs = {
@@ -94,10 +101,43 @@
             }
           );
         };
+
+        # x86_64-pc-windows-gnu build of the CLI, cross-compiled with MinGW.
+        windowsPackages = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+          harbor-rs.lib.mkCrossPackages {
+            inherit
+              pkgs
+              cross
+              craneLib
+              buildCache
+              ;
+            pname = "wincrab";
+            commonArgs = commonArgs // {
+              cargoExtraArgs = "-p wincrab";
+            };
+            targets = [ "windows" ];
+            # Tests cannot execute on the Linux builder; native-tests.yaml runs them on Windows.
+            targetArgs.windows.doCheck = false;
+          }
+        );
+
+        treefmtEval = treefmt-nix.lib.evalModule pkgs {
+          projectRootFile = "flake.nix";
+          programs.rustfmt = {
+            enable = true;
+            edition = "2024";
+            package = toolchain.rustToolchain;
+          };
+          programs.taplo.enable = true;
+        };
       in
       {
         checks = {
           inherit wincrab;
+          formatting = treefmtEval.config.build.check self;
+        }
+        // windowsPackages
+        // {
 
           wincrab-workspace-clippy = craneLib.cargoClippy (
             commonArgs
@@ -114,14 +154,6 @@
               env.RUSTDOCFLAGS = "--deny warnings";
             }
           );
-
-          wincrab-workspace-fmt = craneLib.cargoFmt {
-            inherit src;
-          };
-
-          wincrab-workspace-toml-fmt = craneLib.taploFmt {
-            src = pkgs.lib.sources.sourceFilesBySuffices src [ ".toml" ];
-          };
 
           wincrab-workspace-audit = craneLib.cargoAudit {
             inherit src advisory-db;
@@ -147,6 +179,9 @@
         in {
           inherit wincrab;
           default = wincrab;
+        }
+        // windowsPackages
+        // {
 
           # Convenience wrappers using mkWindowsVM library
           vm-create = defaultVM.create;
@@ -772,21 +807,28 @@
           default = self.apps.${system}.wincrab;
         };
 
-        devShells.default = craneLib.devShell {
-          checks = self.checks.${system};
+        formatter = treefmtEval.config.build.wrapper;
 
-          packages = [
-            # Runtime tools that wincrab orchestrates
-            pkgs.p7zip
-            pkgs.wimlib
-            pkgs.hivex
-            pkgs.xorriso
-            pkgs.cdrtools
-            pkgs.cdrkit
-            pkgs.mtools
-            pkgs.dosfstools
-          ];
-        };
+        devShells =
+          let
+            shells = harbor-rs.lib.mkDevShells {
+              inherit pkgs craneLib cross;
+              enableOsxcrossEnv = false;
+              checks = self.checks.${system};
+              packages = [
+                treefmtEval.config.build.wrapper
+                # Runtime tools that wincrab orchestrates
+                pkgs.p7zip
+                pkgs.wimlib
+                pkgs.hivex
+                pkgs.cdrkit
+                pkgs.curl
+              ];
+            };
+          in
+          {
+            inherit (shells) default windows;
+          };
       }
     );
 }
