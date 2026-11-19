@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use smallvec::SmallVec;
 use tracing::info;
 
 use crate::config::Drivers;
@@ -120,7 +119,7 @@ pub fn inject_drivers(
 
 /// Generate a PowerShell script that installs the bundled drivers on first boot.
 fn generate_install_script(drivers: &DriverPaths, config: &Drivers) -> String {
-    let mut sections: SmallVec<[String; 4]> = SmallVec::new();
+    let mut sections: Vec<String> = Vec::new();
 
     if let Some(ref path) = drivers.btrfs {
         let name = file_name(path);

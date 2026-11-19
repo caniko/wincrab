@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use smallvec::SmallVec;
 use tracing::{info, warn};
 use walkdir::WalkDir;
 
@@ -26,10 +25,8 @@ fn provision_packages_dir(mount_dir: &Path) -> PathBuf {
 
 /// Collect pattern slices from a table of `(enabled, patterns)` pairs.
 ///
-/// Returns a `SmallVec` that fits up to 32 patterns inline (on the stack),
-/// avoiding a heap allocation for the typical case where all built-in
-/// pattern groups total well under 32 entries.
-fn collect_patterns<'a>(groups: &[(bool, &[&'a str])]) -> SmallVec<[&'a str; 32]> {
+/// Returns the patterns of every enabled group.
+fn collect_patterns<'a>(groups: &[(bool, &[&'a str])]) -> Vec<&'a str> {
     groups
         .iter()
         .filter(|(enabled, _)| *enabled)
