@@ -89,6 +89,37 @@ wincrab build --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso -v
 -v, --verbose...           Increase log verbosity (-v = debug, -vv = trace)
 ```
 
+## Direct install from Linux
+
+`wincrab install` writes Windows straight onto a whole disk from a running Linux
+system — no Windows Setup and no WinPE. It partitions the disk (260 MiB EFI
+system partition, 16 MiB MSR, Windows on the rest), formats, applies the chosen
+WIM image with `wimlib-imagex apply`, and installs the UEFI boot files and BCD
+store with [BCD-SYS](https://github.com/jpz4085/BCD-SYS). An optional
+`unattend.xml` is copied to `Windows/Panther/unattend.xml`.
+
+**This wipes the entire disk** and must run as root. `--confirm-wipe` must name
+the same disk as `--disk`.
+
+Extra tools on Linux: `sgdisk` (gdisk), `partprobe` (parted), `mkfs.fat`
+(dosfstools), `mkfs.ntfs` and `ntfs-3g` (ntfs-3g), `wimlib-imagex` (wimlib),
+`7z` (p7zip) and `bcd-sys` (`nix build .#bcd-sys`); they are checked before the
+disk is touched. Only x86_64 UEFI images are supported. Run `wincrab doctor` to
+check them.
+
+`nix run .#test-install-e2e -- <iso> [index]` exercises the whole flow in VMs.
+It expects a Pro edition ISO built by `wincrab build` with the default profile,
+because the boot check runs `tests/vm/verify.ps1`.
+
+```sh
+sudo wincrab install --source Win11_debloated.iso --disk /dev/sdX \
+        --confirm-wipe /dev/sdX --unattend unattend.xml
+```
+
+`--source` may be an ISO or an `install.wim`/`install.esd`; `--index` selects
+the image (default 6 = Windows 11 Pro). Drivers for the target hardware are not
+staged — install them afterwards.
+
 ## Configuration
 
 See `config.toml` for the full reference with comments. The defaults are

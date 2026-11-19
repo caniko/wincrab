@@ -102,6 +102,39 @@
           );
         };
 
+        bcd-sys = pkgs.stdenvNoCC.mkDerivation {
+          pname = "bcd-sys";
+          version = "0-unstable-2024-07-21";
+          src = pkgs.fetchFromGitHub {
+            owner = "jpz4085";
+            repo = "BCD-SYS";
+            rev = "b87f498568b661f65af15f4f8a5273da4d6a4fe8";
+            hash = "sha256-tdFxW2QnZJle6PvSWt5fI+jWY9BNbXenPbQb+ElMBb8=";
+          };
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          installPhase = ''
+            runHook preInstall
+            mkdir -p "$out/bin" "$out/share/BCD-SYS/Resources"
+            install Linux/bcd-sys.sh "$out/bin/bcd-sys"
+            install Linux/{recovery,update_device,wbmfwvar,winload}.sh "$out/share/BCD-SYS"
+            cp Resources/*.txt "$out/share/BCD-SYS/Resources"
+            cp -r Templates "$out/share/BCD-SYS"
+            substituteInPlace "$out/bin/bcd-sys" "$out/share/BCD-SYS/recovery.sh" "$out/share/BCD-SYS/winload.sh" \
+              --replace-fail 'resdir="."' "resdir=\"$out/share/BCD-SYS\""
+            substituteInPlace "$out/bin/bcd-sys" --replace-fail 'tmpdir="."' 'tmpdir="$(mktemp -d /tmp/bcd-sys.XXXXXX)" || exit 1
+            trap '"'"'rm -rf "$tmpdir"'"'"' EXIT'
+            patchShebangs "$out/bin" "$out/share/BCD-SYS"
+            wrapProgram "$out/bin/bcd-sys" --prefix PATH : ${lib.makeBinPath (with pkgs; [
+              hivex attr pev xxd util-linux efibootmgr coreutils gnused gnugrep
+              gawk findutils bash python3 kmod busybox
+            ])}
+            runHook postInstall
+          '';
+          meta.license = lib.licenses.gpl3Only;
+        };
+
+        installVM = import ./tests/vm/install-vm.nix { inherit nixpkgs pkgs wincrab bcd-sys; };
+
         # x86_64-pc-windows-gnu build of the CLI, cross-compiled with MinGW.
         windowsPackages = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
           harbor-rs.lib.mkCrossPackages {
@@ -186,6 +219,11 @@
           default = wincrab;
         }
         // windowsPackages
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux { inherit bcd-sys; }
+        // lib.optionalAttrs (system == "x86_64-linux") {
+          install-vm = installVM;
+          test-install-e2e = import ./tests/vm/install-e2e.nix { inherit pkgs installVM; };
+        }
         // {
 
           # Convenience wrappers using mkWindowsVM library
@@ -810,6 +848,8 @@
             flake = ".";
           };
           default = self.apps.${system}.wincrab;
+        } // lib.optionalAttrs (system == "x86_64-linux") {
+          test-install-e2e = flake-utils.lib.mkApp { drv = self.packages.${system}.test-install-e2e; };
         };
 
         formatter = treefmtEval.config.build.wrapper;

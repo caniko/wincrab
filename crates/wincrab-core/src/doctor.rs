@@ -28,6 +28,36 @@ const TOOLS: &[ToolCheck] = &[
         name: "genisoimage",
         version_args: &["--version"],
     },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "sgdisk",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "partprobe",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "mkfs.fat",
+        version_args: &["--help"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "mkfs.ntfs",
+        version_args: &["--help"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "ntfs-3g",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "bcd-sys",
+        version_args: &[],
+    },
     #[cfg(windows)]
     ToolCheck {
         name: "dism",
@@ -122,16 +152,33 @@ mod tests {
         assert!(names.contains(&"hivexregedit"));
         #[cfg(not(windows))]
         assert!(names.contains(&"genisoimage"));
+        #[cfg(target_os = "linux")]
+        for name in [
+            "sgdisk",
+            "partprobe",
+            "mkfs.fat",
+            "mkfs.ntfs",
+            "ntfs-3g",
+            "bcd-sys",
+        ] {
+            assert!(names.contains(&name));
+        }
+        #[cfg(not(target_os = "linux"))]
+        for name in [
+            "sgdisk",
+            "partprobe",
+            "mkfs.fat",
+            "mkfs.ntfs",
+            "ntfs-3g",
+            "bcd-sys",
+        ] {
+            assert!(!names.contains(&name));
+        }
         #[cfg(windows)]
         for name in ["dism", "reg", "oscdimg"] {
             assert!(names.contains(&name));
         }
         assert!(names.contains(&"curl"));
-    }
-
-    #[test]
-    fn tools_list_count() {
-        assert_eq!(TOOLS.len(), if cfg!(windows) { 6 } else { 5 });
     }
 
     #[test]
