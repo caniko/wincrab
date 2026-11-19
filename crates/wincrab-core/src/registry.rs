@@ -1,8 +1,10 @@
+#[cfg(not(windows))]
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(not(windows))]
+use std::process::Stdio;
 
-use smallvec::SmallVec;
 use tracing::{info, warn};
 
 use crate::config::Config;
@@ -48,12 +50,6 @@ impl HivePaths {
 }
 
 /// Apply all configured registry modifications to the offline hives.
-///
-/// IMPORTANT: hivexsh's `setval N` command replaces ALL values in a key.
-/// Multiple writes to the same key path will destroy earlier values.
-/// To avoid this, NTUSER keys that are written by multiple config sections
-/// (`Explorer\Advanced`, `ContentDeliveryManager`) are consolidated into
-/// dedicated functions that collect all values first and write once.
 pub fn apply_registry_edits(mount_dir: &Path, config: &Config) -> Result<(), Error> {
     let hives = HivePaths::from_mount(mount_dir);
     hives.validate()?;
@@ -85,7 +81,6 @@ pub fn apply_registry_edits(mount_dir: &Path, config: &Config) -> Result<(), Err
     }
 
     // --- Consolidated NTUSER writes for keys shared across config sections ---
-    // These MUST be single writes per key to avoid hivexsh setval clobbering.
     if hives.ntuser.exists() {
         apply_explorer_advanced_values(&hives, config)?;
         apply_content_delivery_manager_values(&hives, config)?;
@@ -177,7 +172,7 @@ fn disable_telemetry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     info!("disabling Windows telemetry via registry");
 
     // Standard data collection path
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.software,
         "\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection",
         &[
@@ -188,7 +183,7 @@ fn disable_telemetry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     )?;
 
     // Group Policy path — takes precedence and survives Windows Setup overrides
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.software,
         "\\Policies\\Microsoft\\Windows\\DataCollection",
         &[
@@ -198,7 +193,7 @@ fn disable_telemetry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     )?;
 
     if config.telemetry.disable_ceip {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Microsoft\\SQMClient\\Windows",
             &[("CEIPEnable", "dword:00000000")],
@@ -206,7 +201,7 @@ fn disable_telemetry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     }
 
     if config.telemetry.disable_app_telemetry {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Microsoft\\Windows\\CurrentVersion\\Policies\\AppCompat",
             &[("AITEnable", "dword:00000000")],
@@ -235,7 +230,7 @@ fn apply_privacy_settings(hives: &HivePaths, config: &Config) -> Result<(), Erro
     if privacy.disable_web_search {
         info!("disabling web search in Start menu");
         // Machine-level policy
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\Explorer",
             &[("DisableSearchBoxSuggestions", "dword:00000001")],
@@ -255,7 +250,7 @@ fn apply_privacy_settings(hives: &HivePaths, config: &Config) -> Result<(), Erro
 
     if privacy.disable_activity_history && hives.ntuser.exists() {
         info!("disabling activity history");
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\System",
             &[
@@ -279,7 +274,7 @@ fn apply_privacy_settings(hives: &HivePaths, config: &Config) -> Result<(), Erro
 
     if privacy.disable_error_reporting {
         info!("disabling Windows Error Reporting via registry");
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Microsoft\\Windows\\Windows Error Reporting",
             &[("Disabled", "dword:00000001")],
@@ -302,7 +297,7 @@ fn apply_privacy_settings(hives: &HivePaths, config: &Config) -> Result<(), Erro
                 &format!(
                     "\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\{cap}"
                 ),
-                &[("Value", "\"Deny\"")],
+                &[("Value", "string:Deny")],
             )?;
         }
     }
@@ -318,7 +313,7 @@ fn disable_copilot(hives: &HivePaths) -> Result<(), Error> {
     info!("disabling Windows Copilot via registry");
 
     // HKLM policy
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.software,
         "\\Policies\\Microsoft\\Windows\\WindowsCopilot",
         &[("TurnOffWindowsCopilot", "dword:00000001")],
@@ -355,7 +350,7 @@ fn apply_edge_policies(hives: &HivePaths, config: &Config) -> Result<(), Error> 
 
     info!("applying Microsoft Edge policies");
 
-    let mut vals: SmallVec<[(&str, &str); 5]> = SmallVec::new();
+    let mut vals: Vec<(&str, &str)> = Vec::new();
 
     if edge.disable_first_run {
         vals.push(("HideFirstRunExperience", "dword:00000001"));
@@ -371,7 +366,7 @@ fn apply_edge_policies(hives: &HivePaths, config: &Config) -> Result<(), Error> 
         vals.push(("SearchbarAllowed", "dword:00000000"));
     }
 
-    run_hivexsh_setval(&hives.software, "\\Policies\\Microsoft\\Edge", &vals)?;
+    merge_reg_values(&hives.software, "\\Policies\\Microsoft\\Edge", &vals)?;
 
     Ok(())
 }
@@ -387,9 +382,6 @@ fn apply_visual_unique_keys(hives: &HivePaths) -> Result<(), Error> {
     info!("optimizing visual settings for performance");
 
     if hives.ntuser.exists() {
-        // Use merge for keys that Windows pre-populates with default values.
-        // setval would destroy those defaults and cause Windows to reset on
-        // user profile creation.
         merge_reg_values(
             &hives.ntuser,
             "\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
@@ -484,10 +476,9 @@ fn inject_user_fixup(mount_dir: &Path, hives: &HivePaths, config: &Config) -> Re
 // ---------------------------------------------------------------------------
 
 /// Merge values into `HKCU\...\Explorer\Advanced` without destroying
-/// Windows' default values.  Uses `hivexregedit --merge` instead of
-/// `hivexsh setval` to preserve existing entries.
+/// Windows' default values.
 fn apply_explorer_advanced_values(hives: &HivePaths, config: &Config) -> Result<(), Error> {
-    let mut vals: SmallVec<[(&str, &str); 16]> = SmallVec::new();
+    let mut vals: Vec<(&str, &str)> = Vec::new();
 
     // From copilot
     if config.copilot.disable {
@@ -549,9 +540,9 @@ fn apply_explorer_advanced_values(hives: &HivePaths, config: &Config) -> Result<
 // ---------------------------------------------------------------------------
 
 /// Merge values into `HKCU\...\ContentDeliveryManager` without destroying
-/// Windows' default values.  Uses `hivexregedit --merge`.
+/// Windows' default values.
 fn apply_content_delivery_manager_values(hives: &HivePaths, config: &Config) -> Result<(), Error> {
-    let mut vals: SmallVec<[(&str, &str); 8]> = SmallVec::new();
+    let mut vals: Vec<(&str, &str)> = Vec::new();
 
     // From visuals — lock screen tips
     if config.visuals.disable_lock_screen_tips {
@@ -598,15 +589,11 @@ fn apply_content_delivery_manager_values(hives: &HivePaths, config: &Config) -> 
 // Scheduled task disabling via registry
 // ---------------------------------------------------------------------------
 
-/// Disable scheduled tasks via the SYSTEM registry hive's TaskCache.
-///
-/// Removing task XML files from the WIM doesn't persist — Windows recreates
-/// them during install. Instead, we disable them at the registry level by
-/// setting `Enabled = 0` in the TaskCache tree entries.
+/// Remove scheduled task Tree entries from the SOFTWARE hive TaskCache.
 fn disable_scheduled_tasks_via_registry(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     let tasks = &config.scheduled_tasks;
 
-    let mut task_paths: SmallVec<[&str; 16]> = SmallVec::new();
+    let mut task_paths: Vec<&str> = Vec::new();
 
     if tasks.remove_telemetry_tasks {
         task_paths.extend_from_slice(&[
@@ -658,35 +645,14 @@ fn disable_scheduled_tasks_via_registry(hives: &HivePaths, config: &Config) -> R
     let base =
         "\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\Microsoft\\Windows";
 
-    // Batch all task disables into a single hivexsh session to avoid
-    // spawning one process per task (40-60% faster for the registry phase).
-    use std::fmt::Write as _;
-    let mut batch = String::with_capacity(task_paths.len() * 120);
-    for task_path in &task_paths {
-        let _ = write!(
-            batch,
-            "cd {base}\\{task_path}\nsetval 1\nEnabled\ndword:00000000\n"
-        );
-    }
-
-    let result = run_hivexsh(&hives.software, &batch);
-    if let Err(e) = result {
-        // Some tasks may not exist in this Windows version. Fall back to
-        // individual calls so we can skip missing ones gracefully.
-        info!(error = %e, "batch task disable failed — falling back to individual calls");
-        for task_path in &task_paths {
-            let result = run_hivexsh_setval(
-                &hives.software,
-                &format!("{base}\\{task_path}"),
-                &[("Enabled", "dword:00000000")],
-            );
-            if let Err(e) = result {
-                info!(task = task_path, error = %e, "task not found in registry (may not exist in this Windows version)");
-            }
-        }
-    }
-
-    Ok(())
+    // ponytail: TaskCache\Tasks\{GUID} entries remain; removing them requires reading each Tree key's Id.
+    let sections: Vec<_> = task_paths
+        .iter()
+        .map(|path| RegSection::Delete {
+            key: format!("{base}\\{path}"),
+        })
+        .collect();
+    apply_reg(&hives.software, &sections)
 }
 
 // ---------------------------------------------------------------------------
@@ -697,7 +663,7 @@ fn disable_services(hives: &HivePaths, config: &Config) -> Result<(), Error> {
     let svc = &config.services;
 
     // Collect all services to disable. Start = 4 means "Disabled".
-    let mut services_to_disable: SmallVec<[&str; 20]> = SmallVec::new();
+    let mut services_to_disable: Vec<&str> = Vec::new();
 
     if svc.disable_diagtrack {
         services_to_disable.push("DiagTrack");
@@ -765,18 +731,14 @@ fn disable_services(hives: &HivePaths, config: &Config) -> Result<(), Error> {
         "disabling services via registry"
     );
 
-    // Batch all service disables into a single hivexsh session.
-    use std::fmt::Write as _;
-    let mut batch = String::with_capacity(services_to_disable.len() * 80);
-    for service_name in &services_to_disable {
-        let _ = write!(
-            batch,
-            "cd \\ControlSet001\\Services\\{service_name}\nsetval 1\nStart\ndword:00000004\n"
-        );
-    }
-    run_hivexsh(&hives.system, &batch)?;
-
-    Ok(())
+    let sections: Vec<_> = services_to_disable
+        .iter()
+        .map(|name| RegSection::Set {
+            key: format!("\\ControlSet001\\Services\\{name}"),
+            values: &[("Start", "dword:00000004")],
+        })
+        .collect();
+    apply_reg(&hives.system, &sections)
 }
 
 // ---------------------------------------------------------------------------
@@ -799,14 +761,14 @@ fn apply_defender_policies(hives: &HivePaths, config: &Config) -> Result<(), Err
 
     // DisableAntiSpyware — top-level Defender policy
     if defender.disable_realtime {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows Defender",
             &[("DisableAntiSpyware", "dword:00000001")],
         )?;
 
         // Real-Time Protection sub-policies
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
             &[
@@ -819,14 +781,14 @@ fn apply_defender_policies(hives: &HivePaths, config: &Config) -> Result<(), Err
     }
 
     if defender.disable_cloud_protection || defender.disable_sample_submission {
-        let mut vals: SmallVec<[(&str, &str); 2]> = SmallVec::new();
+        let mut vals: Vec<(&str, &str)> = Vec::new();
         if defender.disable_cloud_protection {
             vals.push(("SpynetReporting", "dword:00000000"));
         }
         if defender.disable_sample_submission {
             vals.push(("SubmitSamplesConsent", "dword:00000002"));
         }
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows Defender\\Spynet",
             &vals,
@@ -848,14 +810,17 @@ fn apply_defender_policies(hives: &HivePaths, config: &Config) -> Result<(), Err
         merge_reg_values(
             &hives.software,
             "\\Microsoft\\Windows\\CurrentVersion\\Explorer",
-            &[("SmartScreenEnabled", "\"Off\"")],
+            &[("SmartScreenEnabled", "string:Off")],
         )?;
     }
 
     // Disable Defender services in SYSTEM hive
     if defender.disable_services {
-        for svc_name in &["WinDefend", "WdNisSvc"] {
-            run_hivexsh_setval(
+        // WdFilter (minifilter) and WdBoot (ELAM) enforce Defender's tamper
+        // protection; left enabled, Defender restores its services and
+        // policies during setup (seen in a real 25H2 VM install).
+        for svc_name in &["WinDefend", "WdNisSvc", "WdNisDrv", "WdFilter", "WdBoot"] {
+            merge_reg_values(
                 &hives.system,
                 &format!("\\ControlSet001\\Services\\{svc_name}"),
                 &[("Start", "dword:00000004")],
@@ -885,7 +850,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
 
     // AU (Automatic Updates) sub-key
     if wu.disable_auto_updates || wu.no_auto_reboot {
-        let mut vals: SmallVec<[(&str, &str); 3]> = SmallVec::new();
+        let mut vals: Vec<(&str, &str)> = Vec::new();
         if wu.disable_auto_updates {
             vals.push(("NoAutoUpdate", "dword:00000001"));
             vals.push(("AUOptions", "dword:00000002"));
@@ -893,7 +858,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
         if wu.no_auto_reboot {
             vals.push(("NoAutoRebootWithLoggedOnUsers", "dword:00000001"));
         }
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
             &vals,
@@ -902,7 +867,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
 
     // Exclude driver updates
     if wu.exclude_driver_updates {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\WindowsUpdate",
             &[("ExcludeWUDriversInQualityUpdate", "dword:00000001")],
@@ -911,7 +876,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
 
     // Delivery Optimization
     if wu.disable_delivery_optimization {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
             &[("DODownloadMode", "dword:00000000")],
@@ -921,7 +886,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
     // Disable update services if auto-updates are fully disabled
     if wu.disable_auto_updates {
         for svc_name in &["wuauserv", "UsoSvc"] {
-            run_hivexsh_setval(
+            merge_reg_values(
                 &hives.system,
                 &format!("\\ControlSet001\\Services\\{svc_name}"),
                 &[("Start", "dword:00000004")],
@@ -939,7 +904,7 @@ fn apply_windows_update_policies(hives: &HivePaths, config: &Config) -> Result<(
 fn apply_recall_policies(hives: &HivePaths) -> Result<(), Error> {
     info!("disabling Windows Recall / AI data analysis");
 
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.software,
         "\\Policies\\Microsoft\\Windows\\WindowsAI",
         &[
@@ -972,7 +937,7 @@ fn apply_performance_registry(hives: &HivePaths, config: &Config) -> Result<(), 
 
     // NTFS tuning (SYSTEM hive)
     if perf.ntfs_disable_last_access || perf.ntfs_disable_8dot3 {
-        let mut vals: SmallVec<[(&str, &str); 2]> = SmallVec::new();
+        let mut vals: Vec<(&str, &str)> = Vec::new();
         if perf.ntfs_disable_last_access {
             vals.push(("NtfsDisableLastAccessUpdate", "dword:00000001"));
         }
@@ -988,8 +953,8 @@ fn apply_performance_registry(hives: &HivePaths, config: &Config) -> Result<(), 
             &hives.ntuser,
             "\\Control Panel\\Desktop",
             &[
-                ("WaitToKillAppTimeout", "\"2000\""),
-                ("HungAppTimeout", "\"1000\""),
+                ("WaitToKillAppTimeout", "string:2000"),
+                ("HungAppTimeout", "string:1000"),
             ],
         )?;
     }
@@ -999,13 +964,13 @@ fn apply_performance_registry(hives: &HivePaths, config: &Config) -> Result<(), 
         merge_reg_values(
             &hives.system,
             "\\ControlSet001\\Control",
-            &[("WaitToKillServiceTimeout", "\"2000\"")],
+            &[("WaitToKillServiceTimeout", "string:2000")],
         )?;
     }
 
     // Game DVR (SOFTWARE policy)
     if perf.disable_game_dvr {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\GameDVR",
             &[("AllowGameDVR", "dword:00000000")],
@@ -1062,7 +1027,7 @@ fn apply_security_policies(hives: &HivePaths, config: &Config) -> Result<(), Err
 
     // Disable SMBv1 (SYSTEM)
     if sec.disable_smb1 {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.system,
             "\\ControlSet001\\Services\\mrxsmb10",
             &[("Start", "dword:00000004")],
@@ -1071,14 +1036,14 @@ fn apply_security_policies(hives: &HivePaths, config: &Config) -> Result<(), Err
 
     // ASR rules (SOFTWARE)
     if sec.asr_rules {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR",
             &[("ExploitGuard_ASR_Rules", "dword:00000001")],
         )?;
 
         // Individual ASR rule GUIDs — each set to "1" (Block)
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules",
             &[
@@ -1105,7 +1070,7 @@ fn apply_classic_context_menu(hives: &HivePaths) -> Result<(), Error> {
     info!("restoring classic context menu");
 
     // Write the (Default) value as an empty string — name="" for the default value.
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.ntuser,
         "\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32",
         &[("", "string:")],
@@ -1191,7 +1156,7 @@ fn apply_privacy_extensions(hives: &HivePaths, config: &Config) -> Result<(), Er
 
     // Spotlight / cloud content (SOFTWARE)
     if privacy.disable_spotlight_ads {
-        run_hivexsh_setval(
+        merge_reg_values(
             &hives.software,
             "\\Policies\\Microsoft\\Windows\\CloudContent",
             &[
@@ -1281,7 +1246,7 @@ fn register_active_setup(
 
     let display_val = format!("string:{display_name}");
     let cmd_val = format!("string:{command}");
-    run_hivexsh_setval(
+    merge_reg_values(
         &hives.software,
         &format!("\\Microsoft\\Active Setup\\Installed Components\\{component_id}"),
         &[
@@ -1294,231 +1259,192 @@ fn register_active_setup(
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// hivexregedit merge
-// ---------------------------------------------------------------------------
-
-/// Merge individual values into a registry key using `hivexregedit --merge`.
-///
-/// Unlike `run_hivexsh` + `setval N` which **replaces all** values in a key,
-/// this function **merges** values — it sets/updates only the named values
-/// without affecting any other values already present in the key.
-///
-/// Use this for NTUSER.DAT keys that Windows pre-populates with default
-/// values (e.g. `Explorer\Advanced`, `DWM`), where `setval` would destroy
-/// those defaults and cause Windows to reset the key on user creation.
-fn merge_reg_values(
-    hive_path: &Path,
-    key_path: &str,
-    values: &[(&str, &str)],
-) -> Result<(), Error> {
-    // Build a .REG file for hivexregedit
-    let mut reg_content = format!("[{key_path}]\n");
-    for (name, type_value) in values {
-        // hivexregedit uses Windows .REG format:
-        //   "Name"=dword:00000000
-        //   "Name"="string value"
-        //   "Name"=hex:aa,bb,cc
-        reg_content.push_str(&format!("\"{name}\"={type_value}\n"));
-    }
-
-    info!(
-        hive = %hive_path.display(),
-        key = key_path,
-        count = values.len(),
-        "merging registry values via hivexregedit"
-    );
-
-    // Ensure all intermediate keys exist first (hivexregedit doesn't always
-    // create parent keys automatically)
-    ensure_key_path_exists(hive_path, key_path)?;
-
-    let output = spawn_with_stdin(
-        Command::new("hivexregedit").arg("--merge").arg(hive_path),
-        reg_content.as_bytes(),
-    )?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::Command {
-            command: "hivexregedit".into(),
-            code: output.status.code().unwrap_or(-1),
-            stderr: stderr.into_owned(),
-        });
-    }
-
-    Ok(())
+// All offline registry writes use merge semantics.
+enum RegSection<'a> {
+    Set {
+        key: String,
+        values: &'a [(&'a str, &'a str)],
+    },
+    Delete {
+        key: String,
+    },
 }
 
-/// Validate that a registry key/value component does not contain characters
-/// that could inject hivexsh commands (newlines, control chars).
+fn render_reg(sections: &[RegSection<'_>], root_prefix: &str) -> Result<String, Error> {
+    use std::collections::HashSet;
+    use std::fmt::Write as _;
+    let mut rendered = String::new();
+    let mut seen = HashSet::new();
+    for section in sections {
+        let key = match section {
+            RegSection::Set { key, .. } | RegSection::Delete { key } => key,
+        };
+        validate_registry_component(key)?;
+        if !key.starts_with('\\')
+            || key.contains(']')
+            || key.len() == 1
+            || key.contains("\\\\")
+            || key.ends_with('\\')
+        {
+            return Err(Error::Config {
+                message: format!("invalid registry key: {key:?}"),
+            });
+        }
+        match section {
+            RegSection::Delete { .. } => {
+                let _ = writeln!(rendered, "[-{root_prefix}{key}]\n");
+                seen.retain(|path: &String| {
+                    path != key
+                        && !path
+                            .strip_prefix(key)
+                            .is_some_and(|rest| rest.starts_with('\\'))
+                });
+            }
+            RegSection::Set { values, .. } => {
+                let mut path = String::new();
+                for part in key.trim_start_matches('\\').split('\\') {
+                    path.push('\\');
+                    path.push_str(part);
+                    if path != *key && seen.insert(path.clone()) {
+                        let _ = writeln!(rendered, "[{root_prefix}{path}]\n");
+                    }
+                }
+                seen.insert(key.clone());
+                let _ = writeln!(rendered, "[{root_prefix}{key}]");
+                for (name, value) in *values {
+                    validate_registry_component(name)?;
+                    validate_registry_component(value)?;
+                    let name = if name.is_empty() {
+                        "@".to_string()
+                    } else {
+                        format!("\"{}\"", name.replace('\\', "\\\\").replace('"', "\\\""))
+                    };
+                    let value =
+                        if let Some(text) = value.strip_prefix("string:") {
+                            format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
+                        } else if value.strip_prefix("dword:").is_some_and(|v| {
+                            v.len() == 8 && v.chars().all(|c| c.is_ascii_hexdigit())
+                        }) || value.strip_prefix("hex:").is_some_and(|v| {
+                            v.split(',').all(|byte| {
+                                byte.len() == 2 && byte.chars().all(|c| c.is_ascii_hexdigit())
+                            })
+                        }) {
+                            value.to_string()
+                        } else {
+                            return Err(Error::Config {
+                                message: format!("unsupported registry value: {value:?}"),
+                            });
+                        };
+                    let _ = writeln!(rendered, "{name}={value}");
+                }
+                rendered.push('\n');
+            }
+        }
+    }
+    Ok(rendered)
+}
+
 fn validate_registry_component(component: &str) -> Result<(), Error> {
     if component.chars().any(|c| c.is_control()) {
         return Err(Error::Config {
-            message: format!(
-                "registry component contains control characters: {:?}",
-                component,
-            ),
+            message: format!("registry component contains control characters: {component:?}"),
         });
     }
     Ok(())
 }
 
-/// Decompose a backslash-separated registry key path into `(parent, child)` pairs.
-///
-/// For `\A\B\C` this returns `[("\", "A"), ("\A", "B"), ("\A\B", "C")]`.
-fn key_path_components(key_path: &str) -> SmallVec<[(String, String); 6]> {
-    let parts: SmallVec<[&str; 6]> = key_path
-        .trim_start_matches('\\')
-        .split('\\')
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let mut result = SmallVec::new();
-    let mut parent = String::with_capacity(key_path.len());
-    parent.push('\\');
-
-    for part in &parts {
-        result.push((parent.clone(), (*part).to_string()));
-        if parent.len() > 1 {
-            parent.push('\\');
-        }
-        parent.push_str(part);
-    }
-    result
+fn merge_reg_values(hive: &Path, key: &str, values: &[(&str, &str)]) -> Result<(), Error> {
+    apply_reg(
+        hive,
+        &[RegSection::Set {
+            key: key.to_owned(),
+            values,
+        }],
+    )
 }
 
-/// Ensure a registry key path exists by creating intermediate keys via hivexsh.
-fn ensure_key_path_exists(hive_path: &Path, key_path: &str) -> Result<(), Error> {
-    for (parent, child) in key_path_components(key_path) {
-        let add_script = format!(
-            "load {}\ncd {parent}\nadd {child}\ncommit\nclose\n",
-            hive_path.display(),
-        );
-        match spawn_hivexsh(&add_script) {
-            Ok(output) if output.status.success() => {}
-            Ok(output) => {
-                // Key already exists (EEXIST) — this is expected and harmless.
-                // Log at trace level so real issues are still visible.
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if !stderr.contains("exists") {
-                    warn!(
-                        hive = %hive_path.display(),
-                        key = %format!("{parent}\\{child}"),
-                        stderr = %stderr.trim(),
-                        "failed to create registry key (non-EEXIST error)"
-                    );
-                }
-            }
-            Err(e) => {
-                warn!(
-                    hive = %hive_path.display(),
-                    key = %format!("{parent}\\{child}"),
-                    error = %e,
-                    "hivexsh failed while creating registry key"
-                );
-            }
-        }
-    }
-
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// hivexsh runner
-// ---------------------------------------------------------------------------
-
-/// Execute a batch of hivexsh commands against a registry hive file.
-///
-/// `hivexsh` reads commands from stdin in a line-oriented protocol:
-///   load <hive>    -- open a hive file for read-write
-///   cd <path>      -- navigate to a registry key
-///   setval <N>     -- set N values (followed by N triples of name/type:data)
-///   commit         -- write changes back to the hive file
-///   close          -- close the hive
-///
-/// We prepend `load` + `commit` + `close` automatically.
-///
-/// If the script fails because a `cd` target doesn't exist (common in offline
-/// hives where policy keys haven't been created yet), we automatically create
-/// the missing intermediate keys and retry.
-fn run_hivexsh(hive_path: &Path, commands: &str) -> Result<(), Error> {
-    let commands = commands.trim();
-    let script = format!(
-        "load {hive}\n{commands}\ncommit\nclose\n",
-        hive = hive_path.display(),
-    );
-
-    info!(
-        hive = %hive_path.display(),
-        "executing hivexsh batch ({} lines)",
-        script.lines().count(),
-    );
-
-    let output = spawn_hivexsh(&script)?;
-
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    // If a cd target is missing, create all intermediate keys and retry.
-    if stderr.contains("not found") {
-        warn!(
-            hive = %hive_path.display(),
-            "hivexsh: missing registry key(s), creating intermediate keys and retrying"
-        );
-        ensure_cd_paths_exist(hive_path, commands)?;
-
-        let output = spawn_hivexsh(&script)?;
-        if output.status.success() {
-            return Ok(());
-        }
-
-        let stderr = String::from_utf8_lossy(&output.stderr);
+#[cfg(not(windows))]
+fn apply_reg(hive: &Path, sections: &[RegSection<'_>]) -> Result<(), Error> {
+    let text = render_reg(sections, "")?;
+    let output = spawn_with_stdin(
+        Command::new("hivexregedit").arg("--merge").arg(hive),
+        text.as_bytes(),
+    )?;
+    if !output.status.success() {
         return Err(Error::Command {
-            command: format!("hivexsh (hive: {})", hive_path.display()),
+            command: "hivexregedit".into(),
             code: output.status.code().unwrap_or(-1),
-            stderr: stderr.into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         });
     }
-
-    Err(Error::Command {
-        command: format!("hivexsh (hive: {})", hive_path.display()),
-        code: output.status.code().unwrap_or(-1),
-        stderr: stderr.into_owned(),
-    })
+    Ok(())
 }
 
-/// Write values to a registry key using `hivexsh setval`.
-///
-/// This is a declarative wrapper around [`run_hivexsh`] for the common pattern
-/// of `cd <key> + setval N + name/type:value` triples. Each entry in `values`
-/// is `(name, type_and_value)` where `type_and_value` is e.g. `"dword:00000001"`.
-/// Use an empty `name` for the `(Default)` value.
-///
-/// **Note:** `setval` replaces ALL values in a key. Use [`merge_reg_values`]
-/// when you need to preserve existing values.
-fn run_hivexsh_setval(
-    hive_path: &Path,
-    key_path: &str,
-    values: &[(&str, &str)],
-) -> Result<(), Error> {
-    use std::fmt::Write as _;
-    validate_registry_component(key_path)?;
-    for (name, val) in values {
-        validate_registry_component(name)?;
-        validate_registry_component(val)?;
-    }
-    // Build the script in a single String, avoiding intermediate Vec + join.
-    let mut script = format!("cd {key_path}\nsetval {}", values.len());
-    for (name, val) in values {
-        let _ = write!(script, "\n{name}\n{val}");
-    }
-    run_hivexsh(hive_path, &script)
+#[cfg(windows)]
+fn apply_reg(hive: &Path, sections: &[RegSection<'_>]) -> Result<(), Error> {
+    use std::io::Write as _;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let unique = format!(
+        "{}_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    );
+    let mount = format!("HKLM\\WINCRAB_{unique}");
+    let root = format!("HKEY_LOCAL_MACHINE\\WINCRAB_{unique}");
+    let text = format!(
+        "Windows Registry Editor Version 5.00\n\n{}",
+        render_reg(sections, &root)?
+    )
+    .replace('\n', "\r\n");
+    let mut bytes = vec![0xff, 0xfe];
+    bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+    let file = std::env::temp_dir().join(format!("wincrab-{unique}.reg"));
+    let mut temp = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&file)
+        .map_err(|source| Error::Io {
+            context: "writing registry import".into(),
+            source,
+        })?;
+    let write = temp.write_all(&bytes).map_err(|source| Error::Io {
+        context: "writing registry import".into(),
+        source,
+    });
+    drop(temp);
+    let run = |command: &mut Command| -> Result<(), Error> {
+        let output = command.output().map_err(|source| Error::Io {
+            context: "running reg.exe".into(),
+            source,
+        })?;
+        if !output.status.success() {
+            return Err(Error::Command {
+                command: format!("{command:?}"),
+                code: output.status.code().unwrap_or(-1),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            });
+        }
+        Ok(())
+    };
+    let result = write.and_then(|()| {
+        run(Command::new("reg").arg("load").arg(&mount).arg(hive))?;
+        let result = run(Command::new("reg").arg("import").arg(&file));
+        let unload = run(Command::new("reg").arg("unload").arg(&mount));
+        result.and(unload)
+    });
+    let cleanup = std::fs::remove_file(&file).map_err(|source| Error::Io {
+        context: "removing registry import".into(),
+        source,
+    });
+    result.and(cleanup)
 }
 
+#[cfg(not(windows))]
 /// Spawn a command with piped stdin, write `input` to it, and return the output.
 ///
 /// Handles `NotFound` → [`Error::ToolNotFound`] conversion automatically.
@@ -1562,74 +1488,54 @@ fn spawn_with_stdin(cmd: &mut Command, input: &[u8]) -> Result<std::process::Out
     })
 }
 
-/// Spawn a single hivexsh process, feed it a script, and return the output.
-fn spawn_hivexsh(script: &str) -> Result<std::process::Output, Error> {
-    spawn_with_stdin(Command::new("hivexsh").arg("-w"), script.as_bytes())
-}
-
-/// Ensure all registry key paths referenced by `cd` commands exist in the hive.
-///
-/// Parses `cd \A\B\C` lines from the script and delegates to
-/// [`ensure_key_path_exists`] for each path found.
-fn ensure_cd_paths_exist(hive_path: &Path, commands: &str) -> Result<(), Error> {
-    for line in commands.lines() {
-        let trimmed = line.trim();
-        if let Some(path) = trimmed.strip_prefix("cd ") {
-            ensure_key_path_exists(hive_path, path.trim())?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // -----------------------------------------------------------------------
-    // key_path_components
-    // -----------------------------------------------------------------------
-
     #[test]
-    fn key_path_components_basic() {
-        let pairs = key_path_components("\\A\\B\\C");
+    fn render_registry_sections() {
+        let sections = [
+            RegSection::Set {
+                key: "\\A\\B".into(),
+                values: &[("", "string:C:\\x \"y\"")],
+            },
+            RegSection::Set {
+                key: "\\A\\C".into(),
+                values: &[("n", "dword:00000001")],
+            },
+            RegSection::Delete {
+                key: "\\A\\D".into(),
+            },
+        ];
+        let text = render_reg(&sections, "").unwrap();
         assert_eq!(
-            pairs.as_slice(),
-            &[
-                ("\\".into(), "A".into()),
-                ("\\A".into(), "B".into()),
-                ("\\A\\B".into(), "C".into()),
-            ]
+            text,
+            "[\\A]\n\n[\\A\\B]\n@=\"C:\\\\x \\\"y\\\"\"\n\n[\\A\\C]\n\"n\"=dword:00000001\n\n[-\\A\\D]\n\n"
         );
+        let windows = render_reg(&sections, "HKEY_LOCAL_MACHINE\\WINCRAB_test").unwrap();
+        assert!(windows.contains("[HKEY_LOCAL_MACHINE\\WINCRAB_test\\A\\B]"));
+        assert!(windows.contains("[-HKEY_LOCAL_MACHINE\\WINCRAB_test\\A\\D]"));
     }
 
     #[test]
-    fn key_path_components_single() {
-        let pairs = key_path_components("\\OnlyOne");
-        assert_eq!(
-            pairs.as_slice(),
-            &[(String::from("\\"), String::from("OnlyOne"))]
-        );
-    }
-
-    #[test]
-    fn key_path_components_with_spaces() {
-        let pairs = key_path_components("\\A B\\C D");
-        assert_eq!(
-            pairs.as_slice(),
-            &[("\\".into(), "A B".into()), ("\\A B".into(), "C D".into()),]
-        );
-    }
-
-    #[test]
-    fn key_path_components_deeply_nested() {
-        let pairs = key_path_components("\\A\\B\\C\\D\\E\\F\\G");
-        assert_eq!(pairs.len(), 7);
-    }
-
-    #[test]
-    fn key_path_components_empty() {
-        let pairs = key_path_components("");
-        assert!(pairs.is_empty());
+    fn render_rejects_invalid_components() {
+        for (key, name, value) in [
+            ("\\A\nB", "n", "string:x"),
+            ("\\A", "n\t", "string:x"),
+            ("\\A", "n", "string:\0"),
+            ("\\A", "n", "unknown:x"),
+        ] {
+            assert!(matches!(
+                render_reg(
+                    &[RegSection::Set {
+                        key: key.into(),
+                        values: &[(name, value)]
+                    }],
+                    ""
+                ),
+                Err(Error::Config { .. })
+            ));
+        }
     }
 
     // -----------------------------------------------------------------------
