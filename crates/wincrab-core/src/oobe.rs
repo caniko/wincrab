@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use smallvec::SmallVec;
 use tracing::info;
 
 use crate::config::Oobe;
@@ -60,8 +59,7 @@ fn generate_autounattend(config: &Oobe) -> String {
         );
 
         // -- RunSynchronous commands --
-        // At most 5 built-in commands; SmallVec avoids heap allocation.
-        let mut run_sync_cmds: SmallVec<[&str; 5]> = SmallVec::new();
+        let mut run_sync_cmds: Vec<&str> = Vec::new();
 
         if config.skip_microsoft_account {
             run_sync_cmds.push(
@@ -256,7 +254,7 @@ fn generate_autounattend(config: &Oobe) -> String {
 
     // -- First logon commands --
     // 1 built-in + N user commands; Cow avoids allocating for the static built-in.
-    let mut first_logon_cmds: SmallVec<[Cow<'static, str>; 4]> = SmallVec::new();
+    let mut first_logon_cmds: Vec<Cow<'static, str>> = Vec::new();
 
     // Built-in: skip "Let's finish setting up" nag.
     if config.skip_finish_setup_nag {

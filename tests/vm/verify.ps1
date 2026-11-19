@@ -301,6 +301,8 @@ Check-Reg "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" `
     "EnableSmartScreen" 0 "SmartScreen disabled"
 Check-ServiceDisabled "WinDefend" "WinDefend (Defender service)"
 Check-ServiceDisabled "WdNisSvc" "WdNisSvc (Network Inspection)"
+Check-ServiceDisabled "WdFilter" "WdFilter (Defender minifilter)"
+Check-ServiceDisabled "WdBoot" "WdBoot (Defender ELAM driver)"
 
 # --- Windows Update (new) ----------------------------------------------------
 Log ""
@@ -321,17 +323,17 @@ Check-Reg "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" `
 # --- Performance tuning (new) ------------------------------------------------
 Log ""
 Log "[Performance]"
-# Accept both 1 (user-managed disabled) and 0x80000002 (system-managed disabled)
+# Disabled: user-managed 1, or system-managed 0x80000001 / 0x80000003.
 $ntfsVal = (Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
     -Name "NtfsDisableLastAccessUpdate" -ErrorAction SilentlyContinue)
-if ($ntfsVal -eq 1 -or $ntfsVal -eq 0x80000002) {
+if ($null -ne $ntfsVal -and [uint32]$ntfsVal -in @([uint32]1, [uint32]2147483649, [uint32]2147483651)) {
     Log "PASS: NTFS last access disabled"
     $pass++
 } elseif ($null -eq $ntfsVal) {
     Log "FAIL: NTFS last access disabled (key not found)"
     $fail++
 } else {
-    Log "FAIL: NTFS last access disabled (got $ntfsVal, want 1 or 0x80000002)"
+    Log "FAIL: NTFS last access disabled (got $ntfsVal, want 1, 0x80000001 or 0x80000003)"
     $fail++
 }
 Check-Reg "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
@@ -449,6 +451,13 @@ Check-FileContains "C:\Windows\System32\drivers\etc\hosts" `
 Log ""
 Log "[Performance Script]"
 Check-FileExists "C:\wincrab\performance.ps1" "Performance script injected"
+if ((powercfg /getactivescheme | Out-String) -match '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c') {
+    Log "PASS: High Performance power scheme active"
+    $pass++
+} else {
+    Log "FAIL: High Performance power scheme not active"
+    $fail++
+}
 Check-FileContains "C:\wincrab\performance.ps1" `
     "powercfg" "Performance script contains powercfg"
 

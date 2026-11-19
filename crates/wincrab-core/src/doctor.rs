@@ -18,13 +18,60 @@ const TOOLS: &[ToolCheck] = &[
         name: "wimlib-imagex",
         version_args: &["--version"],
     },
+    #[cfg(not(windows))]
     ToolCheck {
-        name: "hivexsh",
+        name: "hivexregedit",
         version_args: &["--version"],
     },
+    #[cfg(not(windows))]
     ToolCheck {
         name: "genisoimage",
         version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "sgdisk",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "partprobe",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "mkfs.fat",
+        version_args: &["--help"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "mkfs.ntfs",
+        version_args: &["--help"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "ntfs-3g",
+        version_args: &["--version"],
+    },
+    #[cfg(target_os = "linux")]
+    ToolCheck {
+        name: "bcd-sys",
+        version_args: &[],
+    },
+    #[cfg(windows)]
+    ToolCheck {
+        name: "dism",
+        version_args: &[],
+    },
+    #[cfg(windows)]
+    ToolCheck {
+        name: "reg",
+        version_args: &[],
+    },
+    #[cfg(windows)]
+    ToolCheck {
+        name: "oscdimg",
+        version_args: &[],
     },
     ToolCheck {
         name: "curl",
@@ -60,14 +107,11 @@ pub fn run_doctor() -> Result<(), Error> {
 }
 
 fn check_disk_space() -> Result<(), Error> {
-    let output = Command::new("df")
-        .arg("-BG")
-        .arg(".")
-        .output()
-        .map_err(|e| Error::Io {
-            context: "running df to check disk space".into(),
-            source: e,
-        })?;
+    // `df` is not available everywhere (e.g. Windows); doctor only warns.
+    let Ok(output) = Command::new("df").arg("-BG").arg(".").output() else {
+        warn!("could not determine available disk space (df unavailable)");
+        return Ok(());
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let avail = stdout
@@ -104,14 +148,37 @@ mod tests {
         let names: Vec<&str> = TOOLS.iter().map(|t| t.name).collect();
         assert!(names.contains(&"7z"));
         assert!(names.contains(&"wimlib-imagex"));
-        assert!(names.contains(&"hivexsh"));
+        #[cfg(not(windows))]
+        assert!(names.contains(&"hivexregedit"));
+        #[cfg(not(windows))]
         assert!(names.contains(&"genisoimage"));
+        #[cfg(target_os = "linux")]
+        for name in [
+            "sgdisk",
+            "partprobe",
+            "mkfs.fat",
+            "mkfs.ntfs",
+            "ntfs-3g",
+            "bcd-sys",
+        ] {
+            assert!(names.contains(&name));
+        }
+        #[cfg(not(target_os = "linux"))]
+        for name in [
+            "sgdisk",
+            "partprobe",
+            "mkfs.fat",
+            "mkfs.ntfs",
+            "ntfs-3g",
+            "bcd-sys",
+        ] {
+            assert!(!names.contains(&name));
+        }
+        #[cfg(windows)]
+        for name in ["dism", "reg", "oscdimg"] {
+            assert!(names.contains(&name));
+        }
         assert!(names.contains(&"curl"));
-    }
-
-    #[test]
-    fn tools_list_count() {
-        assert_eq!(TOOLS.len(), 5);
     }
 
     #[test]

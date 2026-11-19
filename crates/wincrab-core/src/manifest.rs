@@ -46,7 +46,7 @@ pub fn compute_sha256(path: &Path) -> Result<String, Error> {
     }
     let result = hasher.finalize();
 
-    Ok(format!("{result:x}"))
+    Ok(result.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 pub fn write_manifest(manifest: &BuildManifest, output_path: &Path) -> Result<(), Error> {

@@ -41,6 +41,27 @@ enum Commands {
     },
     /// Check that all external tools are installed and working.
     Doctor,
+    /// Install Windows directly onto a disk (destroys all data on it).
+    Install {
+        /// Path to a Windows ISO, install.wim or install.esd.
+        #[arg(short, long)]
+        source: PathBuf,
+        /// Whole target disk, e.g. /dev/sdb or /dev/nvme1n1.
+        #[arg(short, long)]
+        disk: PathBuf,
+        /// Repeat the target disk to confirm the wipe.
+        #[arg(long)]
+        confirm_wipe: PathBuf,
+        /// WIM image index (default: 6 = Windows 11 Pro).
+        #[arg(short, long)]
+        index: Option<u32>,
+        /// unattend.xml to install as Windows/Panther/unattend.xml.
+        #[arg(short, long)]
+        unattend: Option<PathBuf>,
+        /// Working directory for intermediate files.
+        #[arg(short, long, default_value = "wincrab-work")]
+        work_dir: PathBuf,
+    },
     /// Inspect an ISO or WIM file.
     Inspect {
         /// Path to the source ISO.
@@ -100,6 +121,14 @@ fn main() -> ExitCode {
             dry_run,
         } => cmd_build(iso, output, config, work_dir, profile, dry_run),
         Commands::Doctor => cmd_doctor(),
+        Commands::Install {
+            source,
+            disk,
+            confirm_wipe,
+            index,
+            unattend,
+            work_dir,
+        } => cmd_install(source, disk, confirm_wipe, index, unattend, work_dir),
         Commands::Inspect { iso, work_dir } => cmd_inspect(iso, work_dir),
         Commands::Init { output } => cmd_init(output),
         Commands::Validate { config } => cmd_validate(config),
@@ -211,6 +240,42 @@ fn cmd_build(
     }
 
     ExitCode::SUCCESS
+}
+
+fn cmd_install(
+    source: PathBuf,
+    disk: PathBuf,
+    confirm_wipe: PathBuf,
+    index: Option<u32>,
+    unattend: Option<PathBuf>,
+    work_dir: PathBuf,
+) -> ExitCode {
+    let index = index.map_or_else(
+        || wincrab_core::Config::default().wim_index,
+        wincrab_core::WimIndex::new,
+    );
+    let opts = wincrab_core::install::InstallOptions {
+        source,
+        disk,
+        confirm_wipe,
+        index,
+        unattend,
+        work_dir,
+    };
+
+    match wincrab_core::install::run(&opts) {
+        Ok(()) => {
+            println!(
+                "Windows installed to {}. Remove the install medium and boot the machine.",
+                opts.disk.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            error!(%e, "install failed");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn cmd_doctor() -> ExitCode {

@@ -20,3 +20,7 @@ cache = "canix"
 url = "https://attic.candee.baby"
 token_name = "wincrab"
 token_secret = "ATTIC_TOKEN"
+
+[[ci.native_tests]]
+id = "windows"
+runner = "windows-2025"

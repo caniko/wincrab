@@ -15,11 +15,15 @@ pub fn generate_performance_script(config: &Performance) -> String {
         script.push_str("powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c\n\n");
     }
 
+    if config.ntfs_disable_last_access {
+        script.push_str("fsutil behavior set disablelastaccess 1\n");
+    }
+
     script
 }
 
 pub fn inject_performance_script(mount_dir: &Path, config: &Performance) -> Result<(), Error> {
-    if !config.high_perf_power_plan {
+    if !config.high_perf_power_plan && !config.ntfs_disable_last_access {
         return Ok(());
     }
 
@@ -31,6 +35,34 @@ pub fn inject_performance_script(mount_dir: &Path, config: &Performance) -> Resu
     let script_path = script_dir.join("performance.ps1");
     write_file(&script_path, &script)?;
 
+    // ponytail: Windows skips SetupComplete.cmd for OEM product keys (e.g. a
+    // firmware key), so those installs keep the defaults; add an elevated
+    // first-logon trigger if that matters, and verify it in the VM harness.
+    let setup_dir = mount_dir.join("Windows/Setup/Scripts");
+    ensure_dir(&setup_dir)?;
+    let setup_path = setup_dir.join("SetupComplete.cmd");
+    // Bytes, not String: an existing script may use the OEM/ANSI code page.
+    let content = match std::fs::read(&setup_path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(source) => {
+            return Err(Error::Io {
+                context: format!("reading {}", setup_path.display()),
+                source,
+            });
+        }
+    };
+    let command = "powershell -NoProfile -ExecutionPolicy Bypass -File \"%SystemDrive%\\wincrab\\performance.ps1\"";
+    if !content
+        .split(|&b| b == b'\n')
+        .any(|line| line.trim_ascii() == command.as_bytes())
+    {
+        // Prepend: an existing script may end with `exit /b`.
+        let mut updated = format!("{command}\r\n").into_bytes();
+        updated.extend_from_slice(&content);
+        write_file(&setup_path, &updated)?;
+    }
+
     info!(path = %script_path.display(), "injected performance script");
 
     Ok(())
@@ -39,6 +71,30 @@ pub fn inject_performance_script(mount_dir: &Path, config: &Performance) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ntfs_only_installs_script_and_appends_setup_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let setup = dir.path().join("Windows/Setup/Scripts/SetupComplete.cmd");
+        std::fs::create_dir_all(setup.parent().unwrap()).unwrap();
+        // 0xE9 is "é" in Windows-1252 and invalid UTF-8 on its own.
+        std::fs::write(&setup, b"@echo off\r\necho caf\xe9\r\nexit /b 0").unwrap();
+        let config = Performance {
+            high_perf_power_plan: false,
+            ntfs_disable_last_access: true,
+            ..Performance::default()
+        };
+        inject_performance_script(dir.path(), &config).unwrap();
+        inject_performance_script(dir.path(), &config).unwrap();
+        let script = std::fs::read_to_string(dir.path().join("wincrab/performance.ps1")).unwrap();
+        assert!(script.contains("fsutil behavior set disablelastaccess 1"));
+        assert!(!script.contains("powercfg"));
+        let content = std::fs::read(setup).unwrap();
+        assert_eq!(
+            content,
+            b"powershell -NoProfile -ExecutionPolicy Bypass -File \"%SystemDrive%\\wincrab\\performance.ps1\"\r\n@echo off\r\necho caf\xe9\r\nexit /b 0"
+        );
+    }
 
     #[test]
     fn script_contains_power_plan_when_enabled() {
@@ -54,6 +110,7 @@ mod tests {
     fn script_omits_power_plan_when_disabled() {
         let config = Performance {
             high_perf_power_plan: false,
+            ntfs_disable_last_access: false,
             ..Performance::default()
         };
         let script = generate_performance_script(&config);
@@ -65,6 +122,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = Performance {
             high_perf_power_plan: false,
+            ntfs_disable_last_access: false,
             ..Performance::default()
         };
         inject_performance_script(dir.path(), &config).unwrap();
@@ -84,5 +142,13 @@ mod tests {
         assert!(script_path.exists());
         let content = std::fs::read_to_string(&script_path).unwrap();
         assert!(content.contains("powercfg"));
+        assert!(content.contains("fsutil behavior set disablelastaccess 1"));
+        let setup =
+            std::fs::read_to_string(dir.path().join("Windows/Setup/Scripts/SetupComplete.cmd"))
+                .unwrap();
+        assert_eq!(
+            setup,
+            "powershell -NoProfile -ExecutionPolicy Bypass -File \"%SystemDrive%\\wincrab\\performance.ps1\"\r\n"
+        );
     }
 }

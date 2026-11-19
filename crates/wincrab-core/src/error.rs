@@ -71,18 +71,79 @@ pub(crate) fn write_file(path: &std::path::Path, data: impl AsRef<[u8]>) -> Resu
 
 /// Remove a single file.
 pub(crate) fn remove_file(path: &std::path::Path) -> Result<(), Error> {
-    std::fs::remove_file(path).map_err(|e| Error::Io {
+    remove_with(path, |p| std::fs::remove_file(p))
+}
+
+/// Remove a directory tree.
+pub(crate) fn remove_dir_all(path: &std::path::Path) -> Result<(), Error> {
+    remove_with(path, |p| std::fs::remove_dir_all(p))
+}
+
+/// Run `remove`; on Windows, files in a DISM-mounted image are owned by
+/// TrustedInstaller, so on `PermissionDenied` take ownership, grant
+/// Administrators full control and retry once.
+fn remove_with(
+    path: &std::path::Path,
+    remove: fn(&std::path::Path) -> std::io::Result<()>,
+) -> Result<(), Error> {
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut result = remove(path);
+    #[cfg(windows)]
+    if result
+        .as_ref()
+        .is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
+    {
+        grant_admin_tree(path)?;
+        result = remove(path);
+    }
+    result.map_err(|e| Error::Io {
         context: format!("removing {}", path.display()),
         source: e,
     })
 }
 
-/// Remove a directory tree.
-pub(crate) fn remove_dir_all(path: &std::path::Path) -> Result<(), Error> {
-    std::fs::remove_dir_all(path).map_err(|e| Error::Io {
-        context: format!("removing {}", path.display()),
+/// Take ownership of `path` and grant Administrators (SID S-1-5-32-544) full
+/// control, then descend. Going top-down one entry at a time avoids
+/// `takeown /R`, whose `/D Y` answer is localized.
+// ponytail: two process spawns per entry; use the Win32 security API if
+// large trees make this slow.
+#[cfg(windows)]
+fn grant_admin_tree(path: &std::path::Path) -> Result<(), Error> {
+    let meta = std::fs::symlink_metadata(path).map_err(|e| Error::Io {
+        context: format!("inspecting {}", path.display()),
         source: e,
-    })
+    })?;
+    // Symlinks and junctions in a mounted image point at host paths
+    // (e.g. C:\ProgramData); never edit ACLs through or behind them.
+    if meta.file_type().is_symlink() {
+        return Ok(());
+    }
+    run_cmd(
+        std::process::Command::new("takeown")
+            .arg("/F")
+            .arg(path)
+            .arg("/A"),
+    )?;
+    run_cmd(std::process::Command::new("icacls").arg(path).args([
+        "/grant",
+        "*S-1-5-32-544:F",
+        "/C",
+        "/Q",
+    ]))?;
+    if meta.is_dir() {
+        let entries = std::fs::read_dir(path).map_err(|e| Error::Io {
+            context: format!("listing {}", path.display()),
+            source: e,
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|e| Error::Io {
+                context: format!("listing {}", path.display()),
+                source: e,
+            })?;
+            grant_admin_tree(&entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 /// Read a file to `String`.
@@ -306,6 +367,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_success() {
         let output = run_cmd(&mut std::process::Command::new("true")).unwrap();
         assert!(output.status.success());
@@ -321,6 +383,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_failure_returns_command_error() {
         let result = run_cmd(&mut std::process::Command::new("false"));
         assert!(result.is_err());
@@ -328,6 +391,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_captures_stderr() {
         let result = run_cmd(
             std::process::Command::new("sh")
@@ -341,6 +405,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_captures_stdout() {
         let output = run_cmd(std::process::Command::new("echo").arg("hello")).unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -417,6 +482,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_exit_code_in_error() {
         let result = run_cmd(std::process::Command::new("sh").arg("-c").arg("exit 42"));
         match result.unwrap_err() {
@@ -426,6 +492,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn run_cmd_with_arguments() {
         let output = run_cmd(std::process::Command::new("echo").arg("hello").arg("world")).unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);

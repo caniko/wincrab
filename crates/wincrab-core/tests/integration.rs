@@ -1164,6 +1164,7 @@ mod manifest_integration {
 // Hooks integration tests
 // ===========================================================================
 
+#[cfg(unix)]
 mod hooks_integration {
     use wincrab_core::hooks::run_hook;
 
@@ -1280,11 +1281,11 @@ post_build = "echo done"
 bundle = false
 
 [[inject.files]]
-src = "{}"
+src = '{}'
 dest = "Users/Public/Pictures/wallpaper.jpg"
 
 [[inject.files]]
-src = "{}"
+src = '{}'
 dest = "wincrab/custom.ps1"
 "#,
                 wallpaper.display(),
