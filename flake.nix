@@ -117,7 +117,12 @@
             };
             targets = [ "windows" ];
             # Tests cannot execute on the Linux builder; native-tests.yaml runs them on Windows.
-            targetArgs.windows.doCheck = false;
+            targetArgs.windows = {
+              doCheck = false;
+              # ponytail: harbor-rs windowsEnv lacks dlltool, which windows-sys
+              # raw-dylib needs; drop once harbor-rs cross.nix provides it.
+              nativeBuildInputs = [ cross.mingwBinutils ];
+            };
           }
         );
 
