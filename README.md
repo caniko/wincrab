@@ -8,10 +8,11 @@
 
 A Rust CLI tool that builds debloated Windows 11 ISOs entirely from Linux.
 
-wincrab orchestrates Linux-native tools (`7z`, `wimlib-imagex`, `hivexsh`,
-`xorriso`) to extract a stock Windows 11 ISO, strip bloatware and telemetry,
-apply offline registry hardening, and repack the result into a bootable UEFI
-ISO — no Windows or DISM required.
+wincrab orchestrates native tools to extract a stock Windows 11 ISO, strip
+bloatware and telemetry, apply offline registry hardening, and repack the result
+into a bootable UEFI ISO. On Linux it uses `7z`, `wimlib-imagex`, `hivexregedit`
+and `genisoimage` (no Windows or DISM required); on Windows it uses `7z`,
+`wimlib-imagex`, DISM, `reg` and `oscdimg`.
 
 ## Features
 
@@ -29,14 +30,25 @@ ISO — no Windows or DISM required.
 
 ## Prerequisites
 
-The following tools must be on `PATH`:
+On Linux, the following tools must be on `PATH`:
 
 | Tool | Package | Purpose |
 |---|---|---|
 | `7z` | p7zip | ISO extraction |
 | `wimlib-imagex` | wimlib | WIM mount/modify/commit via FUSE |
-| `hivexsh` | hivex | Offline Windows registry editing |
-| `xorriso` | xorriso | UEFI-bootable ISO repacking |
+| `hivexregedit` | hivex | Offline Windows registry editing |
+| `genisoimage` | cdrkit | UDF + El Torito (BIOS/UEFI) ISO repacking |
+| `curl` | curl | Optional driver / Seelen-UI downloads |
+
+Run `wincrab doctor` to check them.
+
+### Platform support
+
+| Host | Status |
+|---|---|
+| Linux | Supported (full pipeline) |
+| Windows | Full pipeline; run as Administrator with 7-Zip, wimlib (Windows build), DISM, `reg`, oscdimg (Windows ADK), and curl on PATH |
+| macOS | Planned |
 
 If you use the Nix flake, all of these are provided automatically in the dev
 shell.
@@ -57,14 +69,14 @@ The binary is at `target/release/wincrab`.
 
 ```sh
 # Using built-in aggressive defaults
-wincrab --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso
+wincrab build --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso
 
 # Using a custom config
-wincrab --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso \
+wincrab build --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso \
         --config config.toml
 
 # With debug logging
-wincrab --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso -v
+wincrab build --iso Win11_24H2_English_x64.iso --output Win11_debloated.iso -v
 ```
 
 ### Options
@@ -115,9 +127,9 @@ wincrab runs a 5-phase pipeline:
 1. **Extract** — `7z x` unpacks the ISO into a staging directory
 2. **Mount** — `wimlib-imagex mountrw` FUSE-mounts the chosen WIM index
 3. **Prune** — deletes matching Appx package directories from the mounted image
-4. **Registry** — pipes hivexsh commands into offline `SOFTWARE`, `SYSTEM`, and
-   `NTUSER.DAT` hives
-5. **Repack** — `xorriso -as mkisofs` with UEFI boot flags rebuilds the ISO
+4. **Registry** — merges `.reg` edits into the offline `SOFTWARE`, `SYSTEM`, and
+   `NTUSER.DAT` hives (`hivexregedit` on Linux, `reg load`/`import` on Windows)
+5. **Repack** — `genisoimage` rebuilds a UDF + El Torito (BIOS and UEFI) ISO
 
 If any phase fails, the WIM mount is automatically cleaned up without committing
 changes.
@@ -134,11 +146,11 @@ crates/
       mount.rs     WimMount RAII guard with Drop cleanup
       debloat.rs   Appx package pruning
       registry.rs  Offline hivexsh registry edits
-      repack.rs    xorriso ISO rebuild
+      repack.rs    genisoimage ISO rebuild
       pipeline.rs  5-phase orchestrator
       error.rs     Error types
 ```
 
 ## License
 
-TBD
+EUPL-1.2
