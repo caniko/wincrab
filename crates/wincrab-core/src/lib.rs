@@ -10,6 +10,7 @@ pub mod github;
 pub mod hooks;
 pub mod hosts;
 pub mod inspect;
+pub mod install;
 pub mod manifest;
 pub mod mount;
 pub mod oobe;
